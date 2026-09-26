@@ -2,7 +2,7 @@
 
 Fine-tune a small LLM (Qwen 2.5 1.5B) to text like you, from your own WhatsApp and Telegram exports. SFT first, then GRPO with a style-consistency reward, evaluated against the base model on held-out chats. Built for an 8 GB laptop GPU.
 
-Status: data pipeline done. Training, rewards, evaluation and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
+Status: data pipeline and SFT stage done. GRPO, evaluation and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
 
 ## Quickstart (synthetic data, no GPU needed)
 
@@ -39,6 +39,22 @@ Put exports in `exports/` and parsed/processed files stay in `data/`; both are g
 3. A gap over 3 hours starts a new session. Consecutive messages from the same person become one turn, joined by newlines (burst texting is part of style).
 4. Each of your turns becomes a window: up to 8 previous turns / 1500 characters of context, your turn as the target. Context turns over 600 characters (pasted documents) are shown as `[long message]`. Telegram quote-replies to a message outside the context are prepended as `> quoted`.
 5. The last 10% of each chat's sessions is test, the 5% before that is val. Splits never cut through a session, so test is strictly later in time than training.
+
+## Training (SFT)
+
+Needs an NVIDIA GPU. Tested target: RTX 4060 Laptop, 8 GB, Windows or Linux, Python 3.12.
+
+```bash
+pip install "torch>=2.8,<2.13" torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install -e ".[train]"
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # must print True
+wandb login          # or set report_to: none in configs/sft.yaml
+echolm train sft
+```
+
+`configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, loss only on your reply. Before training it runs one eval on the base model so the first val loss and sample replies are the baseline. Every 20 steps it evaluates, prints greedy replies to 5 fixed val prompts next to what you actually said, and keeps the checkpoint with the lowest val loss.
+
+Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer) and `run_info.json` (config, data hashes, git commit, token lengths, best val loss, peak VRAM). Close browsers and other GPU apps first; the budget assumes most of the 8 GB is free.
 
 ## Development
 

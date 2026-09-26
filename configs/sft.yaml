@@ -1,0 +1,33 @@
+# SFT stage. Sized for ~900 train windows on an 8 GB RTX 4060 laptop GPU.
+
+model: unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit
+# ~512 tokens of context + short replies; windows longer than this are counted and truncated
+max_seq_len: 1024
+
+# rank 16 rather than the ADR's 64: under 2k windows, a bigger adapter mostly memorizes
+lora_r: 16
+lora_alpha: 16
+lora_dropout: 0.0
+lora_targets: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+# 8 x 2 = 16 windows per step, ~55 steps per epoch
+epochs: 3.0
+batch_size: 8
+grad_accum: 2
+lr: 2.0e-4
+warmup_ratio: 0.05
+weight_decay: 0.01
+
+# the checkpoint with the lowest val loss is kept, not the last one
+eval_steps: 20
+log_steps: 5
+save_total_limit: 2
+
+# greedy replies to a few fixed val prompts at every eval, so you can read what it learned
+n_samples: 5
+sample_max_new_tokens: 64
+
+seed: 13
+# "none" to train without a W&B account
+report_to: wandb
+wandb_project: echolm

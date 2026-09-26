@@ -23,15 +23,18 @@ class DataConfig:
     blocked_words: list[str] = field(default_factory=list)
 
 
-def load_config(path: Path | None) -> DataConfig:
+def load_dataclass(path: Path | None, cls: type):
     if path is None:
-        return DataConfig()
+        return cls()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    known = {f.name for f in fields(DataConfig)}
-    unknown = set(raw) - known
+    unknown = set(raw) - {f.name for f in fields(cls)}
     if unknown:
         raise ValueError(f"unknown config keys in {path}: {sorted(unknown)}")
-    cfg = DataConfig(**raw)
+    return cls(**raw)
+
+
+def load_config(path: Path | None) -> DataConfig:
+    cfg = load_dataclass(path, DataConfig)
     if not 0 <= cfg.val_frac + cfg.test_frac < 1:
         raise ValueError(f"val_frac + test_frac must be in [0, 1), got {cfg.val_frac + cfg.test_frac}")
     return cfg

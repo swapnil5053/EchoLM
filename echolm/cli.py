@@ -75,3 +75,22 @@ def format_cmd(parsed: Path, out: Path, name: str | None, config_path: Path | No
 @click.option("--seed", default=7, show_default=True)
 def synth(out: Path, seed: int) -> None:
     write_synthetic(out, seed)
+
+
+@cli.group(help="Training stages.")
+def train() -> None:
+    pass
+
+
+@train.command("sft", help="Supervised fine-tuning with LoRA on the formatted windows.")
+@click.option("--data", type=click.Path(exists=True, file_okay=False, path_type=Path),
+              default=Path("data/processed"))
+@click.option("--out", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/sft"))
+@click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path),
+              default=Path("configs/sft.yaml"), show_default=True)
+def train_sft_cmd(data: Path, out: Path, config_path: Path) -> None:
+    from echolm.train.config import load_sft_config
+    from echolm.train.sft import train_sft
+
+    out_dir = train_sft(load_sft_config(config_path), data, out)
+    log.info("run saved to %s", out_dir)
