@@ -24,3 +24,12 @@ def test_format_without_parsed_files(tmp_path):
     res = CliRunner().invoke(cli, ["format", "--parsed", str(tmp_path)])
     assert res.exit_code != 0
     assert "run `echolm parse` first" in res.output
+
+
+def test_wrong_me_is_a_clean_error(tmp_path):
+    runner = CliRunner()
+    runner.invoke(cli, ["synth", "--out", str(tmp_path)])
+    res = runner.invoke(cli, ["parse", str(tmp_path / "whatsapp_rohan.txt"), "--me", "kabir"])
+    assert res.exit_code == 1
+    assert "senders are ['Kabir', 'Rohan']" in res.output
+    assert "Traceback" not in res.output

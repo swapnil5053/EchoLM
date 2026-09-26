@@ -37,7 +37,11 @@ def cli(verbose: bool) -> None:
 @CONFIG
 def parse(export: Path, me: str, date_order: str | None, out: Path, config_path: Path | None) -> None:
     cfg = load_config(config_path)
-    msgs = clean(load_export(export, me, date_order), cfg.blocked_words)
+    try:
+        raw = load_export(export, me, date_order)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    msgs = clean(raw, cfg.blocked_words)
     write_jsonl(out / f"{export.stem}.jsonl", [m.to_dict() for m in msgs])
 
 
