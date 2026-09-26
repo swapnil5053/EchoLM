@@ -11,6 +11,7 @@ class DataConfig:
     session_gap_min: int = 180
     max_context_turns: int = 8
     max_context_chars: int = 1500
+    max_turn_chars: int = 600
     max_target_chars: int = 600
     min_target_chars: int = 1
     include_openers: bool = True

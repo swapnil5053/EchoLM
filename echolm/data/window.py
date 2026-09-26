@@ -34,10 +34,17 @@ def to_turns(session: list[Msg]) -> list[Turn]:
     return turns
 
 
-def build_context(prev: list[Turn], max_turns: int, max_chars: int) -> list[tuple[Turn, str]]:
+LONG = "[long message]"
+
+
+def build_context(
+    prev: list[Turn], max_turns: int, max_chars: int, long_chars: int
+) -> list[tuple[Turn, str]]:
     picked, used = [], 0
     for turn in reversed(prev[-max_turns:]):
         text = turn.render()
+        if len(text) > long_chars:
+            text = LONG
         if used + len(text) > max_chars:
             if not picked:
                 picked.append((turn, text[-max_chars:]))
@@ -69,7 +76,8 @@ def make_window(
         return None, "target_too_long"
     if len(target) < cfg.min_target_chars:
         return None, "target_too_short"
-    context = build_context(turns[:i], cfg.max_context_turns, cfg.max_context_chars)
+    context = build_context(turns[:i], cfg.max_context_turns, cfg.max_context_chars,
+                            cfg.max_turn_chars)
     if not context and not cfg.include_openers:
         return None, "opener"
     ts = turns[i].msgs[0].ts.isoformat()

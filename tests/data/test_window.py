@@ -22,14 +22,20 @@ def test_turns_merge_consecutive_sender(mk):
 
 def test_context_respects_turn_and_char_budget(mk):
     turns = [Turn(i % 2 == 1, [mk(i, i % 2 == 1, "x" * 10)]) for i in range(6)]
-    assert len(build_context(turns, 3, 1000)) == 3
-    assert len(build_context(turns, 8, 25)) == 2
+    assert len(build_context(turns, 3, 1000, 600)) == 3
+    assert len(build_context(turns, 8, 25, 600)) == 2
 
 
 def test_context_truncates_single_long_turn(mk):
     turns = [Turn(False, [mk(0, False, "a" * 50 + "END")])]
-    ctx = build_context(turns, 8, 10)
+    ctx = build_context(turns, 8, 10, 600)
     assert ctx[0][1] == "aaaaaaaEND"
+
+
+def test_long_context_turn_is_collapsed(mk):
+    turns = [Turn(False, [mk(0, False, "paste " * 200)]), Turn(True, [mk(1, True, "ye kya hai")])]
+    ctx = build_context(turns, 8, 1500, 600)
+    assert [text for _, text in ctx] == ["[long message]", "ye kya hai"]
 
 
 def test_windows_only_for_my_turns(mk):

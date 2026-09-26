@@ -37,7 +37,7 @@ Put exports in `exports/` and parsed/processed files stay in `data/`; both are g
 1. Messages are parsed; media, deleted and forwarded messages become placeholders (`[media]`, `[deleted]`, `[forwarded] …`) so the turn structure survives.
 2. URLs, emails, phone numbers and OTPs are masked. Text is not lowercased, language-filtered or normalised: Hinglish and English are one vocabulary.
 3. A gap over 3 hours starts a new session. Consecutive messages from the same person become one turn, joined by newlines (burst texting is part of style).
-4. Each of your turns becomes a window: up to 8 previous turns / 1500 characters of context, your turn as the target. Telegram quote-replies to a message outside the context are prepended as `> quoted`.
+4. Each of your turns becomes a window: up to 8 previous turns / 1500 characters of context, your turn as the target. Context turns over 600 characters (pasted documents) are shown as `[long message]`. Telegram quote-replies to a message outside the context are prepended as `> quoted`.
 5. The last 10% of each chat's sessions is test, the 5% before that is val. Splits never cut through a session, so test is strictly later in time than training.
 
 ## Development

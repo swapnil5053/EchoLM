@@ -8,6 +8,8 @@ session_gap_min: 180
 max_context_turns: 8
 # ~512 Qwen tokens for romanized Hinglish; checked against the real tokenizer in the training session
 max_context_chars: 1500
+# a context turn longer than this (pasted docs, transcripts) is shown as [long message]
+max_turn_chars: 600
 
 # replies longer than this are usually pasted text, not your texting style
 max_target_chars: 600
