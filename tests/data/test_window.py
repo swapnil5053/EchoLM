@@ -60,6 +60,15 @@ def test_quote_outside_context_is_attached(mk):
     assert wins[0].quoted is None
 
 
+def test_skip_reasons_are_counted_separately(mk, caplog):
+    msgs = [mk(0, False, "dekh"), mk(1, True, "", kind=MEDIA), mk(2, False, "?"),
+            mk(3, True, "x" * 700), mk(4, False, "??"), mk(5, True, "ok")]
+    with caplog.at_level("INFO"):
+        build_windows(msgs, DataConfig())
+    assert "'empty_target': 1" in caplog.text
+    assert "'target_too_long': 1" in caplog.text
+
+
 def test_no_windows_raises(mk):
     with pytest.raises(ValueError, match="no training windows"):
         build_windows([mk(0, False, "hi")], DataConfig())

@@ -63,8 +63,12 @@ def make_window(
     turns: list[Turn], i: int, sess: int, by_id: dict[str, Msg], cfg: DataConfig
 ) -> tuple[Window | None, str | None]:
     target = turns[i].own_text()
-    if not cfg.min_target_chars <= len(target) <= cfg.max_target_chars:
-        return None, "target_length"
+    if not target:
+        return None, "empty_target"
+    if len(target) > cfg.max_target_chars:
+        return None, "target_too_long"
+    if len(target) < cfg.min_target_chars:
+        return None, "target_too_short"
     context = build_context(turns[:i], cfg.max_context_turns, cfg.max_context_chars)
     if not context and not cfg.include_openers:
         return None, "opener"
