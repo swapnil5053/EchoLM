@@ -1,0 +1,647 @@
+{
+ "name": "Meera",
+ "type": "personal_chat",
+ "id": 4242,
+ "messages": [
+  {
+   "id": 1,
+   "type": "service",
+   "date": "2025-01-09T12:48:23",
+   "actor": "Meera",
+   "action": "phone_call",
+   "text": ""
+  },
+  {
+   "id": 2,
+   "type": "message",
+   "date": "2025-01-09T12:48:23",
+   "date_unixtime": "1736426903",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Bhai kya kar raha hai?",
+   "text_entities": []
+  },
+  {
+   "id": 3,
+   "type": "message",
+   "date": "2025-01-09T12:50:24",
+   "date_unixtime": "1736427024",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "kuch nahi yaar",
+   "text_entities": []
+  },
+  {
+   "id": 4,
+   "type": "message",
+   "date": "2025-01-09T12:52:24",
+   "date_unixtime": "1736427144",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bas assignment",
+   "text_entities": []
+  },
+  {
+   "id": 5,
+   "type": "message",
+   "date": "2025-01-09T12:54:51",
+   "date_unixtime": "1736427291",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Chal na cricket khelne, 5 baje",
+   "text_entities": []
+  },
+  {
+   "id": 6,
+   "type": "message",
+   "date": "2025-01-09T12:55:31",
+   "date_unixtime": "1736427331",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "5 baje?? garmi hai bhai",
+   "text_entities": []
+  },
+  {
+   "id": 7,
+   "type": "message",
+   "date": "2025-01-09T12:56:33",
+   "date_unixtime": "1736427393",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Toh 6 baje",
+   "text_entities": []
+  },
+  {
+   "id": 8,
+   "type": "message",
+   "date": "2025-01-09T12:58:47",
+   "date_unixtime": "1736427527",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "haan 6 theek hai",
+   "text_entities": []
+  },
+  {
+   "id": 9,
+   "type": "message",
+   "date": "2025-01-09T13:00:49",
+   "date_unixtime": "1736427649",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "ground pe milte",
+   "text_entities": []
+  },
+  {
+   "id": 10,
+   "type": "message",
+   "date": "2025-01-12T12:54:10",
+   "date_unixtime": "1736686450",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bhai",
+   "text_entities": []
+  },
+  {
+   "id": 11,
+   "type": "message",
+   "date": "2025-01-12T12:56:50",
+   "date_unixtime": "1736686610",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "tune wo naya cafe try kiya?",
+   "text_entities": []
+  },
+  {
+   "id": 12,
+   "type": "message",
+   "date": "2025-01-12T12:58:21",
+   "date_unixtime": "1736686701",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Kaunsa?",
+   "text_entities": []
+  },
+  {
+   "id": 13,
+   "type": "message",
+   "date": "2025-01-12T13:01:41",
+   "date_unixtime": "1736686901",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "wo 3rd block ke paas wala",
+   "text_entities": []
+  },
+  {
+   "id": 14,
+   "type": "message",
+   "date": "2025-01-12T13:03:47",
+   "date_unixtime": "1736687027",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Nahi, acha hai?",
+   "text_entities": []
+  },
+  {
+   "id": 15,
+   "type": "message",
+   "date": "2025-01-12T13:05:38",
+   "date_unixtime": "1736687138",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "coffee mast hai",
+   "text_entities": []
+  },
+  {
+   "id": 16,
+   "type": "message",
+   "date": "2025-01-12T13:08:52",
+   "date_unixtime": "1736687332",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "chal kal chalte",
+   "text_entities": []
+  },
+  {
+   "id": 17,
+   "type": "message",
+   "date": "2025-01-16T13:09:41",
+   "date_unixtime": "1737032981",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Gym chal raha hai kal subah?",
+   "text_entities": []
+  },
+  {
+   "id": 18,
+   "type": "message",
+   "date": "2025-01-16T13:10:46",
+   "date_unixtime": "1737033046",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "subah 7 baje nahi uthunga bhai",
+   "text_entities": []
+  },
+  {
+   "id": 19,
+   "type": "message",
+   "date": "2025-01-16T13:11:44",
+   "date_unixtime": "1737033104",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "8?",
+   "text_entities": []
+  },
+  {
+   "id": 20,
+   "type": "message",
+   "date": "2025-01-16T13:13:03",
+   "date_unixtime": "1737033183",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "8 chalega",
+   "text_entities": []
+  },
+  {
+   "id": 21,
+   "type": "message",
+   "date": "2025-01-16T13:16:11",
+   "date_unixtime": "1737033371",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "leg day mat karna pls 😂",
+   "text_entities": []
+  },
+  {
+   "id": 22,
+   "type": "message",
+   "date": "2025-01-18T10:34:52",
+   "date_unixtime": "1737196492",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Maggi khayega?",
+   "text_entities": []
+  },
+  {
+   "id": 23,
+   "type": "message",
+   "date": "2025-01-18T10:37:42",
+   "date_unixtime": "1737196662",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bhai 2 packet bana",
+   "text_entities": []
+  },
+  {
+   "id": 24,
+   "type": "message",
+   "date": "2025-01-18T10:38:48",
+   "date_unixtime": "1737196728",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "ek mera",
+   "text_entities": []
+  },
+  {
+   "id": 25,
+   "type": "message",
+   "date": "2025-01-18T10:40:15",
+   "date_unixtime": "1737196815",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Lol theek hai",
+   "text_entities": []
+  },
+  {
+   "id": 26,
+   "type": "message",
+   "date": "2025-01-18T10:41:47",
+   "date_unixtime": "1737196907",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "aur cheese daal dena agar hai toh",
+   "text_entities": []
+  },
+  {
+   "id": 27,
+   "type": "message",
+   "date": "2025-01-19T12:28:36",
+   "date_unixtime": "1737289716",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Notes bhej de DBMS ke",
+   "text_entities": []
+  },
+  {
+   "id": 28,
+   "type": "message",
+   "date": "2025-01-19T12:30:30",
+   "date_unixtime": "1737289830",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "konse chapter ke",
+   "text_entities": []
+  },
+  {
+   "id": 29,
+   "type": "message",
+   "date": "2025-01-19T12:33:26",
+   "date_unixtime": "1737290006",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Normalization wale",
+   "text_entities": []
+  },
+  {
+   "id": 30,
+   "type": "message",
+   "date": "2025-01-19T12:36:10",
+   "date_unixtime": "1737290170",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "ruk bhejta hu",
+   "text_entities": []
+  },
+  {
+   "id": 31,
+   "type": "message",
+   "date": "2025-01-19T12:37:51",
+   "date_unixtime": "1737290271",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "photo le ke",
+   "text_entities": []
+  },
+  {
+   "id": 32,
+   "type": "message",
+   "date": "2025-01-19T12:38:43",
+   "date_unixtime": "1737290323",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Thanks bhai",
+   "text_entities": []
+  },
+  {
+   "id": 33,
+   "type": "message",
+   "date": "2025-01-19T12:41:59",
+   "date_unixtime": "1737290519",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "np",
+   "text_entities": []
+  },
+  {
+   "id": 34,
+   "type": "message",
+   "date": "2025-01-20T18:00:39",
+   "date_unixtime": "1737396039",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Kal ka quiz postponed ho gaya",
+   "text_entities": []
+  },
+  {
+   "id": 35,
+   "type": "message",
+   "date": "2025-01-20T18:03:53",
+   "date_unixtime": "1737396233",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "sach me??",
+   "text_entities": []
+  },
+  {
+   "id": 36,
+   "type": "message",
+   "date": "2025-01-20T18:07:37",
+   "date_unixtime": "1737396457",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bhai best news 😂",
+   "text_entities": []
+  },
+  {
+   "id": 37,
+   "type": "message",
+   "date": "2025-01-20T18:10:20",
+   "date_unixtime": "1737396620",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Haan sir ne mail kiya",
+   "text_entities": []
+  },
+  {
+   "id": 38,
+   "type": "message",
+   "date": "2025-01-20T18:12:20",
+   "date_unixtime": "1737396740",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "acha acha",
+   "text_entities": []
+  },
+  {
+   "id": 39,
+   "type": "message",
+   "date": "2025-01-20T18:14:21",
+   "date_unixtime": "1737396861",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "toh aaj raat movie?",
+   "text_entities": []
+  },
+  {
+   "id": 40,
+   "type": "message",
+   "date": "2025-01-24T16:08:23",
+   "date_unixtime": "1737734903",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Result aa gaya",
+   "text_entities": []
+  },
+  {
+   "id": 41,
+   "type": "message",
+   "date": "2025-01-24T16:11:25",
+   "date_unixtime": "1737735085",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "kitna aaya tera?",
+   "text_entities": []
+  },
+  {
+   "id": 42,
+   "type": "message",
+   "date": "2025-01-24T16:13:27",
+   "date_unixtime": "1737735207",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "8.2",
+   "text_entities": []
+  },
+  {
+   "id": 43,
+   "type": "message",
+   "date": "2025-01-24T16:14:02",
+   "date_unixtime": "1737735242",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "nice bhai 🔥",
+   "text_entities": []
+  },
+  {
+   "id": 44,
+   "type": "message",
+   "date": "2025-01-24T16:15:10",
+   "date_unixtime": "1737735310",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "mera toh dekhne ki himmat nahi ho rahi 😂",
+   "text_entities": []
+  },
+  {
+   "id": 45,
+   "type": "message",
+   "date": "2025-01-25T13:29:01",
+   "date_unixtime": "1737811741",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Did you check the placement list?",
+   "text_entities": []
+  },
+  {
+   "id": 46,
+   "type": "message",
+   "date": "2025-01-25T13:29:49",
+   "date_unixtime": "1737811789",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "nahi abhi dekha nahi",
+   "text_entities": []
+  },
+  {
+   "id": 47,
+   "type": "message",
+   "date": "2025-01-25T13:31:36",
+   "date_unixtime": "1737811896",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Your name is there for round 2",
+   "text_entities": []
+  },
+  {
+   "id": 48,
+   "type": "message",
+   "date": "2025-01-25T13:34:29",
+   "date_unixtime": "1737812069",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "wait what",
+   "text_entities": []
+  },
+  {
+   "id": 49,
+   "type": "message",
+   "date": "2025-01-25T13:35:02",
+   "date_unixtime": "1737812102",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bhai seriously??",
+   "text_entities": []
+  },
+  {
+   "id": 50,
+   "type": "message",
+   "date": "2025-01-25T13:35:48",
+   "date_unixtime": "1737812148",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Yes! Congrats",
+   "text_entities": []
+  },
+  {
+   "id": 51,
+   "type": "message",
+   "date": "2025-01-25T13:36:08",
+   "date_unixtime": "1737812168",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "thank youuu xd",
+   "text_entities": []
+  },
+  {
+   "id": 52,
+   "type": "message",
+   "date": "2025-01-25T13:38:53",
+   "date_unixtime": "1737812333",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "party pakki",
+   "text_entities": []
+  },
+  {
+   "id": 53,
+   "type": "message",
+   "date": "2025-01-27T18:07:53",
+   "date_unixtime": "1738001273",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Bro can you explain recursion once more",
+   "text_entities": []
+  },
+  {
+   "id": 54,
+   "type": "message",
+   "date": "2025-01-27T18:10:50",
+   "date_unixtime": "1738001450",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "haan simple hai",
+   "text_entities": []
+  },
+  {
+   "id": 55,
+   "type": "message",
+   "date": "2025-01-27T18:11:16",
+   "date_unixtime": "1738001476",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "function khud ko call karta hai chhote input ke saath",
+   "text_entities": []
+  },
+  {
+   "id": 56,
+   "type": "message",
+   "date": "2025-01-27T18:11:54",
+   "date_unixtime": "1738001514",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "And base case?",
+   "text_entities": []
+  },
+  {
+   "id": 57,
+   "type": "message",
+   "date": "2025-01-27T18:13:07",
+   "date_unixtime": "1738001587",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "wahi jaha rukna hai",
+   "text_entities": []
+  },
+  {
+   "id": 58,
+   "type": "message",
+   "date": "2025-01-27T18:16:04",
+   "date_unixtime": "1738001764",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "warna infinite chalega xd",
+   "text_entities": []
+  },
+  {
+   "id": 59,
+   "type": "message",
+   "date": "2025-01-29T18:16:04",
+   "date_unixtime": "1738174564",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Dekh kya mila",
+   "text_entities": [],
+   "photo": "photos/photo_1.jpg"
+  },
+  {
+   "id": 60,
+   "type": "message",
+   "date": "2025-01-29T18:17:04",
+   "date_unixtime": "1738174624",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "bhai ye wahi hai na jo tu bol rahi thi",
+   "text_entities": [],
+   "reply_to_message_id": 2
+  },
+  {
+   "id": 61,
+   "type": "message",
+   "date": "2025-01-29T18:18:04",
+   "date_unixtime": "1738174684",
+   "from": "Meera",
+   "from_id": "user2002",
+   "text": "Placement drive on 12th, register by Friday",
+   "text_entities": [],
+   "forwarded_from": "PES Placements"
+  },
+  {
+   "id": 62,
+   "type": "message",
+   "date": "2025-01-29T18:19:04",
+   "date_unixtime": "1738174744",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": [
+    "register kar diya ",
+    {
+     "type": "link",
+     "text": "https://example.com/form"
+    }
+   ],
+   "text_entities": []
+  },
+  {
+   "id": 63,
+   "type": "message",
+   "date": "2025-01-29T18:20:04",
+   "date_unixtime": "1738174804",
+   "from": "Kabir",
+   "from_id": "user1001",
+   "text": "",
+   "text_entities": [],
+   "media_type": "sticker",
+   "sticker_emoji": "😂",
+   "file": "stickers/s.webp"
+  }
+ ]
+}

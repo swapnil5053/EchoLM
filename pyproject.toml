@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "echolm"
+version = "0.1.0"
+description = "Fine-tune a small LLM to text like you, from your WhatsApp and Telegram exports"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "click>=8.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+echolm = "echolm.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["echolm*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "C4", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+known-first-party = ["echolm"]

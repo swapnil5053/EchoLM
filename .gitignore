@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# real chat data and anything derived from it never enters git
+/data/
+/exports/
+*.zip
+ChatExport_*/
+WhatsApp Chat*.txt
+
+# training outputs
+/outputs/
+/lora-*/
+/wandb/
+*.safetensors
+*.gguf

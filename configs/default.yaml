@@ -1,0 +1,31 @@
+# Data pipeline settings. Paths are passed on the command line, not here.
+
+# gaps longer than this start a new conversation session
+session_gap_min: 30
+
+# how much history goes in front of each of your replies
+max_context_turns: 8
+# ~512 Qwen tokens for romanized Hinglish; checked against the real tokenizer in the training session
+max_context_chars: 1500
+
+# replies longer than this are usually pasted text, not your texting style
+max_target_chars: 600
+min_target_chars: 1
+
+# windows where you opened the conversation (no prior message from them)
+include_openers: true
+
+# time-based split, per chat, by whole sessions
+val_frac: 0.05
+test_frac: 0.10
+
+# cap one chat's share of the train split (0.0-1.0). null = no cap.
+# with one dominant chat a cap throws most of your data away, so it is off by default
+max_chat_share: null
+
+seed: 13
+
+system_prompt: "You are {name}. Reply to the chat exactly the way {name} texts."
+
+# words that get masked as <REDACTED> wherever they appear (case-insensitive)
+blocked_words: []
