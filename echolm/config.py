@@ -8,7 +8,7 @@ import yaml
 
 @dataclass
 class DataConfig:
-    session_gap_min: int = 30
+    session_gap_min: int = 180
     max_context_turns: int = 8
     max_context_chars: int = 1500
     max_target_chars: int = 600

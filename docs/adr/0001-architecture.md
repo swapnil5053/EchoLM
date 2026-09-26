@@ -19,7 +19,7 @@ raw export (.txt / .json)
 Msg(ts, sender, text, kind, chat_id, is_me)          # one record per message
   │  clean.py: drop system/media stubs, PII scrub (mask, don't drop), dedup
   ▼
-sessions                                              # split on gap > 30 min
+sessions                                              # split on gap > 180 min
   │  window.py: merge consecutive same-sender messages → turns
   │             for each of MY turns: context = previous turns in session,
   │             newest first, up to k=8 turns / 512 tokens
@@ -162,8 +162,9 @@ The prompts contain other people's messages, and a model trained on them can rep
 3. Dataset size: still to be measured on the real export (`stats.json` reports it). The r=64 vs r=16 decision in Decision 2 waits on that number.
 
 **2026-09-26, changes made while building the data pipeline**
-- **Turn merging:** all consecutive messages from the same sender within a session form one turn, instead of merging only under a 2-minute gap. This keeps user/assistant turns strictly alternating for the chat template, and the 30-minute session gap already bounds how far apart they can be.
+- **Turn merging:** all consecutive messages from the same sender within a session form one turn, instead of merging only under a 2-minute gap. This keeps user/assistant turns strictly alternating for the chat template, and the session gap already bounds how far apart they can be.
 - **Deleted and media messages are kept as placeholders** (`[deleted]`, `[media]`, `[forwarded] …`) rather than dropped. Dropping them silently merges turns that were really separated by the other person (the same class of bug found in WeClone's PII handling).
 - **Contact cap is off by default** (`max_chat_share: null`). With one dominant chat, a 30% cap would discard most of the data. `stats.json` reports per-chat counts so the cap can be switched on deliberately.
 - **Context budget is in characters** (1500, roughly 512 Qwen tokens for romanized Hinglish) so the data step has no model dependency. The training session checks the real token lengths.
 - **SFT uses TRL's conversational prompt/completion format**, so loss is only on the target reply. Your earlier messages in the context are not trained on again in every window they appear in.
+- **Session gap raised from 30 to 180 minutes** after measuring the real chat: median reply gap is 1 minute, but 24% of replies come more than 30 minutes later and 10% more than 3.7 hours later. At 30 minutes, 28% of windows were "openers" with no context; at 180 minutes, 14%. Context is still capped at 8 turns / 1500 chars, so the longer gap doesn't flood the prompt.

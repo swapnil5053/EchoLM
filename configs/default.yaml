@@ -1,7 +1,8 @@
 # Data pipeline settings. Paths are passed on the command line, not here.
 
-# gaps longer than this start a new conversation session
-session_gap_min: 30
+# gaps longer than this start a new conversation session.
+# 30 split too many slow replies from what they answer (24% of replies came 30+ min later)
+session_gap_min: 180
 
 # how much history goes in front of each of your replies
 max_context_turns: 8

@@ -54,7 +54,7 @@ def test_media_only_reply_is_skipped(mk):
 
 def test_quote_outside_context_is_attached(mk):
     msgs = [mk(0, False, "movie chalein?", msg_id="1"), mk(1, True, "haan", msg_id="2"),
-            mk(100, False, "kal?", msg_id="3"), mk(101, True, "wo movie", msg_id="4", reply_to="1")]
+            mk(300, False, "kal?", msg_id="3"), mk(301, True, "wo movie", msg_id="4", reply_to="1")]
     wins = build_windows(msgs, DataConfig())
     assert wins[1].quoted == "movie chalein?"
     assert wins[0].quoted is None
