@@ -194,5 +194,45 @@ def eval_report_cmd(out: Path, readme: Path | None) -> None:
     click.echo(path.read_text(encoding="utf-8"))
 
 
+@cli.command(help="Write a model card (README.md) into a GRPO run's adapter folder.")
+@click.option("--run", "run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="GRPO run folder (default: newest in outputs/grpo)")
+@click.option("--eval", "eval_root", type=click.Path(file_okay=False, path_type=Path),
+              default=Path("outputs/eval"))
+@DATA
+def card(run_dir: Path | None, eval_root: Path, data: Path) -> None:
+    from echolm.card import write_card
+    from echolm.train.select import newest_run
+
+    try:
+        run_dir = run_dir or newest_run(Path("outputs/grpo"), "grpo-run-*")
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(str(write_card(run_dir, eval_root, data)))
+
+
+@cli.command(help="Chat with the base, SFT and GRPO models side by side in the browser (local only).")
+@click.option("--outputs", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs"))
+@DATA
+@click.option("--sft", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="SFT adapter (default: the selected checkpoint of the newest SFT run)")
+@click.option("--grpo", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="GRPO adapter (default: the newest GRPO run)")
+@click.option("--port", type=int, default=7860, show_default=True)
+def demo(outputs: Path, data: Path, sft: Path | None, grpo: Path | None, port: int) -> None:
+    from echolm.demo.app import build_app
+    from echolm.demo.models import ModelBank
+    from echolm.demo.models import find_adapters
+    from echolm.demo.models import system_prompt
+    from echolm.eval.config import EvalConfig
+
+    adapters = find_adapters(outputs)
+    adapters.update({k: v for k, v in (("sft", sft), ("grpo", grpo)) if v})
+    bank = ModelBank(EvalConfig().base_model, adapters)
+    # bound to this machine only: the replies are generated from private chats
+    build_app(bank, system_prompt(data)).launch(server_name="127.0.0.1", server_port=port, share=False,
+                                                inbrowser=True)
+
+
 if __name__ == "__main__":
     cli()
