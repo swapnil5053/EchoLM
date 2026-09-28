@@ -1,177 +1,76 @@
 # ADR-0001: EchoLM architecture
 
-- Status: accepted (revised 2026-09-26, see Revisions)
-- Date: 2026-09-25
-- Context: WeClone audit (`AUDIT-weclone.md`)
+- Status: accepted
+- First draft: 2026-09-25, revised after the first real SFT run (2026-09-29)
 
 ## Context
 
-EchoLM fine-tunes a small LLM to reply the way one specific person writes in chat. Inputs are that person's WhatsApp (`.txt`) and Telegram (`result.json`) exports. The training target is a single laptop: RTX 4060 Laptop (8 GB VRAM), 16 GB RAM, Windows.
+EchoLM fine-tunes a small LLM to reply the way one specific person texts, from their WhatsApp and Telegram exports. The target machine is one Windows laptop: RTX 4060 Laptop GPU (8 GB), 16 GB RAM. The chats are heavily code-switched (romanized Hindi and English). WeClone showed the idea works but delegates everything to LLaMA-Factory, has no evaluation, and leaks the target reply into the prompt for conversation openers. EchoLM keeps the idea and its time-gap grouping; everything else is new.
 
-WeClone shows the concept works, but delegates everything to LLaMA-Factory, has no evaluation, and has a label-leak in its conversation-start samples. EchoLM keeps the concept and the time-window grouping idea. All code is new.
+Several decisions below changed after measuring the first real run. Each says what was measured.
 
-## Decision 1: Data flow
+## 1. Data
 
-```
-raw export (.txt / .json)
-  │  parse/whatsapp.py, parse/telegram.py
-  ▼
-Msg(ts, sender, text, kind, chat_id, is_me)          # one record per message
-  │  clean.py: drop system/media stubs, PII scrub (mask, don't drop), dedup
-  ▼
-sessions                                              # split on gap > 180 min
-  │  window.py: merge consecutive same-sender messages → turns
-  │             for each of MY turns: context = previous turns in session,
-  │             newest first, up to k=8 turns / 512 tokens
-  ▼
-windows: {chat_id, ts, context[], target}
-  │  split.py: split by time — last 10% of sessions per chat → test,
-  │            previous 5% → val; never split within a session
-  ├──────────────► sft.jsonl   (chat-template messages; loss on target only)
-  ├──────────────► grpo.jsonl  (prompt = context; target kept as reference for rewards)
-  └──────────────► profile.json (my stylometric fingerprint, computed on train only)
-  ▼
-train_sft (Unsloth + TRL SFTTrainer) ─► lora-sft/
-  ▼
-train_grpo (TRL GRPOTrainer, starts from lora-sft) ─► lora-grpo/
-  ▼
-evaluate: base vs sft vs sft+grpo on the test windows ─► report.json + W&B
-  ▼
-demo (Gradio, model switcher) · model card generator
-```
+- **Parsing.** WhatsApp's text format depends on phone locale, so day/month order is inferred from the whole file (any first field > 12 decides), with a `--date-order` override. Lines without a timestamp continue the previous message; newlines are kept because burst texting is style. Telegram is read per chat, `personal_chat` only.
+- **One vocabulary.** No language detection, case folding, stemming or filtering: Hinglish and English tokens are the same stream.
+- **Masking, not dropping.** URLs, emails, phone numbers and OTPs are replaced in place. Deleted, media and forwarded messages remain as placeholders. Dropping them silently glues together turns the other person interrupted, the same class of bug as WeClone's.
+- **Duplicates.** Only messages with the same platform id are duplicates. WhatsApp timestamps have minute resolution, so two identical "haha"s in one minute are two real messages; an earlier version deleted one of them.
+- **Sessions: 180-minute gap** (was 30). Measured: median reply gap 1 min, but 24% of replies come after more than 30 min and 10% after 3.7 h. At 30 min, 28% of windows were "openers" answering nothing; at 180 min, 14%.
+- **Windows.** One per turn of yours: up to 8 previous turns / 1500 characters as context. Context turns over 600 characters (83 pasted documents in the real export, one of 63k characters) become `[long message]`. Replies containing a link are dropped: the first model learned to answer with a bare `<URL>`.
+- **Split by time.** Per chat, the last 10% of sessions are test and the 5% before that val, never splitting a session. Test is always later than training.
+- **No per-chat cap by default.** With one dominant chat, capping its share discards most of the data.
 
-Parsing decisions:
-- **WhatsApp:** the timestamp format depends on phone locale (`dd/mm/yy` vs `m/d/yy`, 12 vs 24 hour, with or without seconds, `[...]` brackets on iOS). Detect the format from the first ~50 lines instead of guessing per line. Lines without a timestamp continue the previous message (keep the newlines — they are a style signal). Drop `<Media omitted>`, "This message was deleted", encryption notice, and join/leave lines. The user picks "me" by sender name via a CLI flag.
-- **Telegram:** `from_id` identifies "me". `text` may be a list of entity fragments — join them. Keep `reply_to_message_id`, because a quoted reply is a better context anchor than "previous message".
-- **PII:** mask in place (`<PHONE>`, `<EMAIL>`, `<URL>`) instead of dropping the message. Dropping silently breaks turn pairing (a WeClone bug).
-- **No leaked targets:** conversation-start turns (I spoke first) get an empty/"(new conversation)" context, never the answer in the prompt.
-- **Group chats:** off by default. When on, context turns are prefixed with the speaker's name.
-- **Contact balancing:** cap windows per chat (e.g. 30% of the dataset) so one chat doesn't define "my style".
+## 2. Model: Qwen2.5-1.5B-Instruct, 4-bit, LoRA rank 16
 
-## Decision 2: Qwen 2.5 1.5B Instruct, 4-bit, LoRA r=64
+1.5B in 4-bit leaves room on 8 GB for LoRA training plus sampling 4 replies per prompt; measured SFT peak was 4.9 GB. Style is mostly a surface target (length, casing, code-switching, recurring phrases), which a 1.5B model can represent.
 
-**Primary reason: it fits.** Estimated budget for GRPO, which is the tighter stage:
+Rank 16 rather than the 64 of the first draft: the real export gives 813 training replies, and a larger adapter mostly memorizes.
 
-| Item | Approx. |
+## 3. SFT
+
+- Loss on reply tokens only. Labels are built in our own code (`echolm/train/data.py`, prompt tokens set to -100) and trained with the plain transformers `Trainer`, so the loss mask does not depend on how a TRL or Unsloth version handles prompt-completion data.
+- Windows longer than the sequence limit are dropped, never truncated: right truncation would cut the reply being trained on.
+- **Checkpoint selection with a tolerance.** Measured on the first run: val loss 4.234 at step 80 and 4.124 at step 100 (2.6% better), while the share of replies copying a 6-word run from training went from 0.018 to 0.188 and distinct replies fell from 0.37 to 0.29. `echolm train select` takes the earliest checkpoint within 3% of the best val loss.
+
+## 4. GRPO instead of DPO
+
+There is no preference data for "sounds like me", but a reward can be computed for any sampled reply against the real reply to the same message. GRPO samples a group of replies per prompt and learns from their relative rewards, which needs no preference pairs and corrects the policy's own failure modes on-policy. DPO with synthetic pairs (real reply chosen, SFT reply rejected) stays the fallback if GRPO does not beat SFT.
+
+**The measured failure is collapse, not style.** SFT removed assistant phrasing (63% → 0%) and closed 70% of the style gap, but only 29–37% of its sampled replies are unique, against 96% for the real replies. The training replies are 95% unique, so the repetition comes from the model. A reward that scores closeness to an average "style profile" would make this worse, so the reward set is built around it:
+
+| reward | why |
 |---|---|
-| 1.5B weights in 4-bit | ~1.2 GB |
-| LoRA r=64 on all 7 linear projections (~74M params) + Adam states | ~1.0 GB |
-| vLLM generation (weights + KV cache, `gpu_memory_utilization≈0.35`) | ~2.5 GB |
-| Activations, 4 × (512 prompt + 128 completion) tokens, gradient checkpointing | ~1–1.5 GB |
-| **Total** | **~6–6.5 GB of 8** |
+| chrF to the real reply for that message | a stock reply matches almost none of the real replies, so it loses within its group; character n-grams work on Hinglish without any language tooling |
+| style match against the real reply for that message | per-message, not per-population, so it doesn't pull every reply towards the most typical one |
+| length match | stops padding and one-word collapse |
+| duplicate within the group (−1) | direct pressure against collapse |
+| 6-gram copy of a *different* training reply (−1) | memorization |
+| assistant phrases, empty reply (−1) | keeps SFT's gains |
 
-3B in 4-bit roughly doubles weights and LoRA and leaves no room for vLLM plus a group of 4. 7B only fits SFT, and only with small batches. These are estimates; session 3 measures real peak memory before any config is committed.
+## 5. GRPO implementation
 
-**Secondary reason (the one worth putting in the README):** style is mostly a surface-level target — length, casing, punctuation, emoji, code-switching, recurring phrases. A 1.5B model has the capacity for that. What it lacks is slack: it can't smooth over noisy data, so improvements have to come from curation and reward design, which can be measured. A large model that sounds like you may just be memorizing; the memorization metric in Decision 6 is what makes this claim checkable rather than rhetorical.
+Written from scratch in `echolm/rl` rather than through TRL's `GRPOTrainer`, so that every piece is visible and tested, and because the pieces that matter here are small:
 
-Stated limits: weaker world knowledge and multi-turn coherence than 7B. This will show in the demo.
+- 4 samples per prompt, 4 prompts per step; advantages normalized within each group; groups with no reward spread are skipped (logged as `zero_std_groups`).
+- Clipped ratio objective (PPO-style), active when a batch is reused for several updates; on-policy (`num_iterations: 1`) it reduces exactly to REINFORCE with a group baseline, which a unit test checks on the gradient.
+- Token-level normalization across the step, so short and long replies weigh per token, not per reply.
+- **No KL term.** With LoRA, the frozen reference policy is the model with the adapter disabled, i.e. the base chatbot. A KL penalty would pull the policy back towards exactly what SFT removed. Instead: lr 1e-5, gradient norm clipped at 0.2, and reward terms that penalize assistant phrasing.
+- Validation every 25 steps on the val split, including step 0 = the SFT model. The final adapter is the checkpoint with the highest val reward; if GRPO never beats SFT, the SFT weights are what is kept.
+- Two model backends: Unsloth (fast kernels) and plain transformers + PEFT. The Windows script falls back to the second if the first fails. No vLLM: it does not run on Windows, so generation uses `model.generate`.
 
-**On r=64:** a few thousand personal windows plus r=64 on all projections can overfit or memorize. Default is r=64, alpha=64, dropout 0, one ablation run at r=16. Keep r=64 only if memorization rate and val loss support it.
+## 6. Evaluation
 
-## Decision 3: SFT first, then GRPO
+- Same 50 held-out prompts (later in time than all training data) for every model, 3 samples each at temperature 0.8. Greedy decoding was dropped because it hides collapse behind one most-likely reply.
+- **Detection AUC** is the headline metric: a cross-validated character n-gram classifier trying to separate the model's replies from the real ones (0.5 = indistinguishable). No reward optimizes it. A first "authorship" classifier (you vs the other person) was replaced after measurement: it gave the untrained chatbot a higher score (0.60) than it gave the real replies (0.61), because assistant text is neither person's.
+- **Floor for detection:** real test replies vs real training replies. Your own style drifts over time, so this, not 0.5, is the realistic target.
+- chrF (with a 95% bootstrap interval over prompts), style gap, perplexity of the real replies, distinct replies, 6-gram copying and assistant phrases complete the table. chrF, style, copying and assistant phrases are also GRPO rewards on the training split and are flagged as such in the report.
 
-SFT teaches the output distribution: reply length, register, language mix, what "a reply" looks like in this chat. GRPO without that starts from an assistant-style policy, samples almost never look like the user, rewards across the group barely differ, and the group-relative advantage is near zero. So there's nothing to learn from.
+## 7. Platform and operations
 
-After SFT, the samples in a group already vary in how "me" they are, so the rewards separate them, and GRPO can push toward the tail of the style distribution that SFT's averaging loss washes out (SFT tends toward a bland, most-common reply).
+- Windows native, PowerShell, Python 3.12. `scripts/run.ps1` runs every stage with a smoke test before each training run and a fallback path for the Windows-specific failure it is most likely to hit.
+- Unattended runs: sleep is blocked while training (`SetThreadExecutionState`), W&B falls back to offline mode instead of prompting for a login, logs go to `train.log`, SFT resumes from checkpoints.
+- Reproducibility: every run records its config, data file hashes, git commit, val history and peak VRAM in `run_info.json`.
 
-GRPO starts from the SFT LoRA. The KL term (`beta`, start 0.04) is measured against the SFT policy, not the base model.
+## 8. Privacy
 
-## Decision 4: GRPO over DPO
-
-- DPO needs chosen/rejected pairs. There are no human preference labels for "sounds like me", and labeling them yourself doesn't scale.
-- GRPO samples G completions per prompt and ranks them within the group with a programmatic reward. Style consistency can be computed automatically, so GRPO fits this problem.
-- GRPO is on-policy: it corrects the SFT model's own failure modes (e.g. drifting into assistant tone) rather than a fixed pairwise snapshot.
-
-**Considered alternative, kept as a fallback:** DPO with synthetic pairs — chosen = the real reply, rejected = the SFT model's reply (or the base model's). It's cheap, offline and stable. The weakness is that "rejected" is sometimes as good as or better than the real reply, which adds label noise. If GRPO turns out unstable or too slow on 8 GB, this is the plan B, and the same eval harness compares them.
-
-Config start: `num_generations=4` (raise to 6/8 if peak VRAM < 6.5 GB), `max_prompt_length=512`, `max_completion_length=128`, temperature 0.9, lr 5e-6, beta 0.04, Unsloth `fast_inference=True` (vLLM).
-
-**Platform constraint:** vLLM doesn't run natively on Windows. Without it, GRPO generation goes through HF `generate` and runs several times slower. Decision: run training in **WSL2 (Ubuntu)** with CUDA passthrough, with WSL's memory set to ~12 GB in `.wslconfig`. The parsing, eval and demo code stays OS-agnostic.
-
-## Decision 5: What "style consistency" means operationally
-
-A **style profile** is computed from my train-split target messages only. Features per reply:
-
-| Group | Features |
-|---|---|
-| Length | chars, words, messages-per-burst (newline count) |
-| Casing | lowercase-start rate, all-caps word rate, "i" vs "I" |
-| Punctuation | terminal punctuation rate, `!`/`?`/`...` rate, repeated punctuation (`!!`, `??`) |
-| Emoji/emoticon | per-char emoji rate, top-k emoji set, `:)`/`xd`-style emoticons |
-| Lexical | signature lexicon: tokens with high log-odds of me vs the people I talk to (slang, fillers, abbreviations like "ngl", "bro", "haan") |
-| Formality | contractions, abbreviations, and a small formal-marker list ("regards", "kindly", full sentences with capitalization) |
-
-**Rewards** (each scaled to [0, 1], weighted sum):
-
-| Reward | Definition | Start weight |
-|---|---|---|
-| `style` | 1 − normalized distance between the completion's feature vector and the profile (z-scored per feature, clipped) | 0.40 |
-| `length` | `exp(-|log(len_c+1) − log(len_ref+1)|)` against the real reply to this context | 0.20 |
-| `lexicon` | fraction of completion tokens in my signature lexicon, capped so repeating one word doesn't pay off; plus a small term for overlap with the reference reply | 0.20 |
-| `consistency` | penalty when a small NLI model (DeBERTa-v3 MNLI, on **CPU**) says the reply contradicts the context | 0.20, off in first run |
-
-Guards (subtracted, not weighted): repeated n-gram penalty, "assistant-isms" penalty ("As an AI", "I'd be happy to help", "Certainly!"), empty or truncated completion.
-
-**Factual consistency, defined narrowly:** don't contradict what's in the context window. There's no ground truth for facts about your life, so "factual" can't mean more than that. The NLI model runs on CPU so it doesn't use VRAM, but it slows each step, so it's switched on only after the cheap rewards are stable.
-
-**Response latency:** kept out of the rewards. A model produces text, not timing, so latency can't be rewarded. It is used in the data (burst merging and session splits) and reported as dataset statistics.
-
-**Reward hacking** is the main risk: length and lexicon rewards alone can be gamed by padding and keyword stuffing. Mitigations: the caps above, the KL term, guards, and logging 5 sample completions to W&B every 50 steps to read them.
-
-## Decision 6: Evaluation — does it sound like me, or just like a chatbot?
-
-All three models (base with the same system prompt, SFT, SFT+GRPO) generate replies to the same held-out **test windows** (later in time than any training data), same sampling settings, 3 seeds.
-
-| Metric | Measures | Why it's there |
-|---|---|---|
-| **Authorship classifier** | % of generated replies a held-out classifier attributes to me | The headline number. Char n-gram logistic regression trained on real messages (me vs the people I talk to), on a split disjoint from GRPO data. Its features differ from the reward features so GRPO isn't graded on its own reward |
-| **Stylometric divergence** | Jensen–Shannon divergence per feature distribution (length, emoji rate, punctuation, casing) between generated and real test replies | Shows *which* style dimension improved |
-| **Held-out NLL / perplexity** | Likelihood of my real test replies under each model | Standard, cheap, catches overfitting |
-| **Assistant-ism rate** | % replies containing chatbot phrases | Directly measures "just a chatbot" |
-| **Memorization rate** | % replies sharing an 8-gram with any training target | Checks copy vs generalize; also a privacy check |
-| **Context relevance** | Embedding similarity between reply and last context turn, vs the real reply's similarity | Catches a model that sounds like me but ignores the message |
-| **Blind human test** | 2–3 friends see context + two replies (real vs SFT+GRPO), pick the real one; ~50 items | Only real ground truth. 50% = indistinguishable |
-
-A win is: authorship ↑ and divergence ↓ from base → SFT → SFT+GRPO, while assistant-ism and memorization stay low and relevance doesn't drop. Report all rows, including ones where GRPO doesn't help.
-
-## Decision 7: Tooling
-
-- **Package:** `echolm/` with `parse/`, `data/`, `train/`, `rewards/`, `eval/`, `demo/`; Click CLI `echolm parse | format | train sft | train grpo | eval | demo | card`. Plain YAML config and dataclasses, no Pydantic (per style guide).
-- **W&B:** every run logs config, dataset hash, git SHA, peak VRAM, per-reward means, and sample completions. `WANDB_MODE=offline` is supported for runs without network.
-- **Demo:** Gradio with base / SFT / SFT+GRPO switching — one 4-bit base loaded once, LoRA adapters swapped, so it fits in 8 GB. Bound to `127.0.0.1`, `share=False` (WeClone defaults to a public tunnel).
-- **Model card:** generated from the eval report and training config — metrics table, data description (counts only), limitations, intended use.
-
-## Decision 8: Privacy
-
-The prompts contain other people's messages, and a model trained on them can reproduce them.
-- Exports, processed data and adapters trained on real chats are git-ignored and never pushed.
-- The public repo ships a small **synthetic** demo dataset and results from it. Real-data results can go in the README as aggregate numbers only.
-- The model card generator refuses to reference an adapter trained on data marked `private: true`, unless an explicit override flag is passed.
-
-## Consequences
-
-- EchoLM is more code than WeClone because it doesn't delegate to LLaMA-Factory. That's the point of the rebuild, but it means the parsers, windowing and rewards need their own unit tests (`tests/` mirrors `echolm/`).
-- WSL2 is required for GRPO at useful speed.
-- The claims in the README (small model, style not memorization, GRPO helps) are falsifiable by the eval table. If GRPO doesn't beat SFT, the ADR's fallback (synthetic-pair DPO) gets tested and the result is reported either way.
-
-## Revisions
-
-**2026-09-26, answers to the open questions**
-1. Chats are heavily Hinglish (romanized Hindi mixed with English). All text is one vocabulary: no language detection, no language-specific tokenization, no case folding, no filtering by language. The "language mix" feature is dropped from the style profile; code-switching is captured by the signature lexicon instead ("acha", "bhai", "kya" are lexicon tokens like any other).
-2. v1 uses 1:1 chats only. WhatsApp exports with more than two senders and Telegram chats that aren't `personal_chat` are skipped with a warning. Group chats are deferred.
-3. Dataset size: still to be measured on the real export (`stats.json` reports it). The r=64 vs r=16 decision in Decision 2 waits on that number.
-
-**2026-09-26, changes made while building the data pipeline**
-- **Turn merging:** all consecutive messages from the same sender within a session form one turn, instead of merging only under a 2-minute gap. This keeps user/assistant turns strictly alternating for the chat template, and the session gap already bounds how far apart they can be.
-- **Deleted and media messages are kept as placeholders** (`[deleted]`, `[media]`, `[forwarded] …`) rather than dropped. Dropping them silently merges turns that were really separated by the other person (the same class of bug found in WeClone's PII handling).
-- **Contact cap is off by default** (`max_chat_share: null`). With one dominant chat, a 30% cap would discard most of the data. `stats.json` reports per-chat counts so the cap can be switched on deliberately.
-- **Context budget is in characters** (1500, roughly 512 Qwen tokens for romanized Hinglish) so the data step has no model dependency. The training session checks the real token lengths.
-- **SFT uses TRL's conversational prompt/completion format**, so loss is only on the target reply. Your earlier messages in the context are not trained on again in every window they appear in.
-- **Session gap raised from 30 to 180 minutes** after measuring the real chat: median reply gap is 1 minute, but 24% of replies come more than 30 minutes later and 10% more than 3.7 hours later. At 30 minutes, 28% of windows were "openers" with no context; at 180 minutes, 14%. Context is still capped at 8 turns / 1500 chars, so the longer gap doesn't flood the prompt.
-- **SFT uses LoRA rank 16, not 64.** The real export gives 877 train windows (one 1:1 chat), under the ~2k threshold from Decision 2. Rank 16 with 3 epochs and best-val-loss checkpointing is the starting point; rank 64 is an ablation for later if val loss and the memorization check allow it.
-- **Windows over `max_seq_len` are dropped, not truncated.** TRL truncates from the right, which would cut off the reply being trained on.
-- **Windows native, no WSL.** The project runs on Windows with PowerShell. SFT uses Unsloth directly on Windows. vLLM does not run on Windows, so the GRPO stage will generate with plain `model.generate` (slower, same results); Decision 4's WSL2 requirement is dropped.
-- **SFT uses the plain transformers `Trainer` with explicit labels** (prompt tokens set to -100) instead of TRL's `SFTTrainer`. The loss mask is then visible in our own code and tests, and does not depend on how a given TRL / Unsloth version handles prompt-completion data.
-- **Evaluation samples at temperature 0.8 with 3 seeds instead of greedy decoding.** The first SFT run showed greedy decoding collapsing different prompts onto one stock reply, which would hide the model's real style distribution. A `distinct` column reports that collapse directly.
-- **Replies that share a link are dropped from training** (`drop_link_targets`). The first run learned to answer with a bare `<URL>`: link shares are frequent in the chat but aren't writing style.
-- **Sample replies stay off W&B by default** (`wandb_samples: false`). They contain real messages from both people in the chat; W&B only gets the metrics.
+Exports, processed data, adapters and generations are git-ignored. W&B receives metrics only unless `wandb_samples: true`. The demo binds to 127.0.0.1. A model trained on a real chat has read the other person's messages, so the weights stay private; the public repository ships a synthetic dataset.

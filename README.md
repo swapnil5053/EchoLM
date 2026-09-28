@@ -1,93 +1,154 @@
 # EchoLM
 
-Fine-tune a small LLM (Qwen 2.5 1.5B) to text like you, from your own WhatsApp and Telegram exports. SFT first, then GRPO with a style-consistency reward, evaluated against the base model on held-out chats. Built for an 8 GB laptop GPU.
+**Fine-tune a 1.5B language model to text like you, from your own WhatsApp and Telegram chats, on an 8 GB laptop GPU.**
 
-Status: data pipeline, SFT and evaluation done (Windows). GRPO and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
+EchoLM turns a chat export into a time-split dataset, fine-tunes Qwen2.5-1.5B-Instruct with LoRA (SFT), then keeps training it with a from-scratch GRPO loop whose rewards target the failure SFT actually showed: collapsing onto a few stock replies. Every stage is measured on replies written *after* anything the model trained on, including a classifier that tries to tell the model's replies from yours.
 
-## Quickstart (synthetic data, no GPU needed)
+Built for code-switched chat: romanized Hindi and English are treated as one vocabulary, with no language detection, lowercasing or filtering.
+
+```mermaid
+flowchart LR
+    A[WhatsApp .txt<br/>Telegram .json] --> B[parse + mask PII]
+    B --> C[sessions, turns,<br/>context windows]
+    C --> D[time split<br/>train / val / test]
+    D --> E[SFT<br/>LoRA r16, reply-only loss]
+    E --> F[checkpoint selection<br/>val loss + tolerance]
+    F --> G[GRPO<br/>6 rewards, 4 samples/prompt]
+    G --> H[eval on later replies<br/>detection AUC, chrF, style, copying]
+    H --> I[report, model card,<br/>local Gradio demo]
+```
+
+## Results
+
+<!-- results:start -->
+First measured run: one 1:1 chat, 813 training replies, 50 held-out test replies written later than all training data, 3 sampled replies per prompt. (`scripts/run.ps1` regenerates this table with the full metric set, GRPO included.)
+
+| model | style gap ↓ | reply ppl ↓ | chatbot ↓ | 6-gram copy ↓ | distinct ↑ | median words |
+|---|---|---|---|---|---|---|
+| base (Qwen2.5-1.5B-Instruct) | 1.133 | 323.9 | 0.633 | 0.000 | 0.787 | 18.3 |
+| SFT, lowest val loss (step 100) | 0.345 | 79.4 | 0.000 | 0.188 | 0.287 | 3.3 |
+| SFT, selected (step 80) | **0.313** | 80.0 | 0.000 | **0.018** | **0.373** | 6.7 |
+| your real replies | 0.000 | – | 0.000 | 0.000 | 0.960 | 3 |
+<!-- results:end -->
+
+What the numbers say:
+
+- **SFT learns the style.** The model stops sounding like an assistant (63% → 0% assistant phrases), matches reply length, and your real replies become 4x more predictable to it.
+- **The lowest val loss is not the best model.** From step 80 to 100 val loss improved by 2.6% while copying of training text went up 10x. EchoLM picks the earliest checkpoint within 3% of the best loss instead (`echolm train select`).
+- **SFT collapses.** Only about a third of its replies are unique, against 96% of yours, and your training data is 95% unique, so it isn't repetition in the data. GRPO's rewards are built around that.
+
+## How it works
+
+### Data
+
+A WhatsApp export is plain text in a locale-dependent format: day/month order is detected from the whole file, 12/24-hour clocks, iOS brackets and multi-line messages are handled, and invisible direction marks are stripped. Telegram JSON exports are read per chat, 1:1 only. URLs, emails, phone numbers and OTPs are masked in place; media, deleted and forwarded messages stay as placeholders so the turn structure survives.
+
+A gap of more than 3 hours starts a new session (measured on the real chat: a quarter of replies come more than 30 minutes later). Consecutive messages from one person become one turn, joined by newlines, since texting in bursts is part of style. Each of your turns becomes a training window: up to 8 previous turns / 1500 characters as context, your turn as the target. Pasted walls of text are collapsed to `[long message]` and replies that only share a link are dropped. The last 10% of each chat's sessions is test and the 5% before that val, so evaluation is always on later messages.
+
+### SFT
+
+Qwen2.5-1.5B-Instruct in 4-bit with Unsloth, LoRA rank 16 on all attention and MLP projections, the plain transformers `Trainer` with labels built in code so only reply tokens carry loss. Every 20 steps it evaluates, saves, and prints sample replies next to the real ones. Rank 16 rather than 64: with ~800 windows a larger adapter mostly memorizes.
+
+### GRPO, implemented from scratch
+
+`echolm/rl` is a self-contained GRPO trainer (no TRL): for each prompt it samples 4 replies, scores them, and pushes the policy towards the replies that beat their group's average:
+
+- advantage `A = (r − mean(group)) / std(group)`; groups where all 4 replies score the same carry no signal and are skipped;
+- PPO-style clipped ratio, active when a batch is reused (`num_iterations > 1`);
+- token-level loss normalization: every generated token weighs the same, whatever the reply length;
+- **no KL term**. With LoRA, the frozen reference is the adapter-free *base* model, so a KL penalty would pull the policy back towards the chatbot SFT just trained away. Small clipped steps (lr 1e-5, grad norm 0.2) and the reward terms keep it near the SFT model instead;
+- validation every 25 steps, including step 0 = the SFT model: if GRPO never beats SFT on val reward, the final adapter *is* the SFT one.
+
+The rewards (`echolm/rl/rewards.py`), each computed per sampled reply:
+
+| reward | range | what it does |
+|---|---|---|
+| chrF to your real reply | 0..1 | character n-gram F-score (exact sacrebleu implementation) against what you actually replied to that message. A stock reply matches almost none of your replies, so it loses its group |
+| style match | 0..1 | 9 style features (length, lines, emoji, casing, punctuation, elongation like "youuu"…) compared with *your reply to the same message*, not with an average reply, which would reward the most typical answer |
+| length match | 0..1 | word-count ratio to your reply, log scale |
+| duplicate | 0 / −1 | reply identical to another sample in its group |
+| copy | 0 / −1 | shares a 6-word run with a different training reply (memorization) |
+| chatbot, empty | 0 / −1 | assistant phrases, empty replies |
+
+### Evaluation
+
+Every model answers the same 50 later-in-time test prompts, 3 samples each at temperature 0.8 (greedy decoding hides collapse). Metrics:
+
+- **detect AUC**: a character n-gram classifier, cross-validated, tries to tell your real test replies from the model's. 0.5 = indistinguishable. No reward optimizes it. The "your real replies" row pits your later replies against your earlier ones, the realistic floor since your own style drifts.
+- **chrF** with a 95% bootstrap interval over prompts, **style gap**, **perplexity** of your real replies, **distinct** replies, **6-gram copy**, **assistant phrases**.
+- Columns marked † in the report are also GRPO rewards (on the training split), and are read with that in mind.
+
+## Run it
+
+### Synthetic demo data (any OS, no GPU)
 
 ```bash
 pip install -e ".[dev]"
 echolm parse examples/synthetic/whatsapp_rohan.txt --me Kabir
 echolm parse examples/synthetic/telegram_meera.json --me Kabir
-echolm format --config configs/default.yaml
+echolm format
+pytest
 ```
 
-This writes to `data/processed/`:
+Two fictional Hinglish chats (`echolm synth` regenerates them); `examples/synthetic/processed/` has the expected output.
 
-| File | Contents |
+### Your chats (Windows, NVIDIA GPU, Python 3.12)
+
+Export a chat (WhatsApp on the phone: chat → More → Export chat → Without media; Telegram Desktop: Export chat history → JSON) into `exports/`, plug in the charger, close other GPU apps, then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Me "your name as it appears in the export"
+.venv\Scripts\echolm demo
+```
+
+`run.ps1` installs a CUDA build of torch, Unsloth and the rest into `.venv`, rebuilds the dataset, trains SFT (reusing a finished run unless `-RetrainSft`), selects the checkpoint, runs GRPO, evaluates base / SFT / GRPO, writes `outputs/eval/report.md`, updates the table above and writes a model card into the GRPO adapter. Each training stage runs a short smoke test first and falls back to a slower path if the fast one fails on Windows. `-Stages grpo,eval,card` runs a subset.
+
+The demo opens a local page (bound to 127.0.0.1, never shared) where you play the other person, switch between the base, SFT and GRPO models, and compare all three on one message.
+
+| command | what it does |
 |---|---|
-| `windows.jsonl` | every context window with its split label |
-| `train_sft.jsonl`, `val_sft.jsonl` | TRL conversational prompt/completion format |
-| `grpo.jsonl` | train prompts plus the real reply as `reference` for reward functions |
-| `test.jsonl` | held-out prompts plus `reference`, used only by evaluation |
-| `stats.json` | counts per split and chat, openers, quotes, reply lengths |
+| `echolm parse EXPORT --me NAME` | parse one export into cleaned messages |
+| `echolm format` | windows, time split, SFT / GRPO / test files, `stats.json` |
+| `echolm train check` | GPU, packages, data, disk and W&B preflight |
+| `echolm train sft [--max-steps N] [--resume RUN]` | SFT |
+| `echolm train select` | print the SFT checkpoint GRPO starts from |
+| `echolm train grpo [--init ADAPTER] [--backend hf]` | GRPO |
+| `echolm eval run --model base\|ADAPTER --name NAME` | sample and score one model |
+| `echolm eval report [--readme README.md]` | comparison table |
+| `echolm card` | model card for the newest GRPO run |
+| `echolm demo` | local chat UI |
 
-The synthetic chats are two fictional Hinglish 1:1 conversations (Kabir with Rohan on WhatsApp, with Meera on Telegram) and produce ~55 windows. `examples/synthetic/processed/` has the expected output. `echolm synth` regenerates the raw exports.
+Every run writes a `run_info.json` (config, data hashes, git commit, val history, peak VRAM, runtime) and a `train.log`. W&B logging falls back to offline mode when you are not logged in, and sample text never goes to W&B unless `wandb_samples: true`.
 
-## Your own data
+## Project layout
 
-- **WhatsApp:** open the chat → More → Export chat → Without media. Pass your name exactly as it appears in the file. Date order (day/month vs month/day) is detected automatically; use `--date-order` if the whole export is ambiguous.
-- **Telegram:** Telegram Desktop → Settings → Advanced → Export Telegram data → JSON, or export a single chat. `--me` takes your display name or your `user…` id. Only personal (1:1) chats are used.
-
-Put exports in `exports/` and parsed/processed files stay in `data/`; both are git-ignored. Never commit real chats or adapters trained on them.
-
-## How the data is shaped
-
-1. Messages are parsed; media, deleted and forwarded messages become placeholders (`[media]`, `[deleted]`, `[forwarded] …`) so the turn structure survives.
-2. URLs, emails, phone numbers and OTPs are masked. Text is not lowercased, language-filtered or normalised: Hinglish and English are one vocabulary.
-3. A gap over 3 hours starts a new session. Consecutive messages from the same person become one turn, joined by newlines (burst texting is part of style).
-4. Each of your turns becomes a window: up to 8 previous turns / 1500 characters of context, your turn as the target. Context turns over 600 characters (pasted documents) are shown as `[long message]`. Telegram quote-replies to a message outside the context are prepended as `> quoted`.
-5. The last 10% of each chat's sessions is test, the 5% before that is val. Splits never cut through a session, so test is strictly later in time than training.
-
-## Training (SFT)
-
-EchoLM targets Windows with an NVIDIA GPU (built on an RTX 4060 Laptop, 8 GB), Python 3.12 and PowerShell. Put your exports in `exports/`, plug in the charger, close browsers and other GPU apps, then from the repo root:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\train_windows.ps1 -Me "your name as it appears in the export"
+```
+echolm/
+  parse/     WhatsApp and Telegram parsers
+  data/      cleaning, windows, time split, export, synthetic data
+  train/     SFT (Unsloth + Trainer), checkpoint selection, preflight, Windows runtime helpers
+  rl/        GRPO: rewards, chrF, rollouts, loss, training loop, W&B tracker
+  eval/      sampling, detection AUC, style, copying, report
+  demo/      Gradio app with adapter switching
+  card.py    model card
+configs/     default.yaml (data), sft.yaml, grpo.yaml, eval.yaml
+scripts/     run.ps1
+docs/adr/    design decisions and the evidence behind them
+tests/       one test file per module; the SFT, GRPO, eval and demo paths run end to end on CPU with a tiny model
 ```
 
-The script creates `.venv` if needed, installs a CUDA build of torch plus Unsloth, re-parses every export, rebuilds the dataset, runs `echolm train check`, does a 10-step smoke run of the whole loop, then the full run. It stops at the first failing step and says which one. Add `-SkipInstall` on later runs.
+## Privacy
 
-The same steps by hand:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-echolm train check               # GPU, packages, data, disk, W&B
-echolm train sft --max-steps 10  # smoke test
-echolm train sft                 # full run
-echolm train sft --resume outputs\sft\<run name>   # continue after a crash
-```
-
-`configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, batch 4 x 4 accumulation. Loss is computed only on your reply tokens. Training starts with one eval of the untouched model as the baseline; every 20 steps it evaluates, saves a checkpoint, and prints greedy replies to 5 fixed val prompts next to what you actually said. The checkpoint with the lowest val loss is the one kept as the final adapter.
-
-Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer), `checkpoint-*/`, `train.log` and `run_info.json` (config, data hashes, git commit, token lengths, val loss per eval from the untrained baseline on, best val loss, peak VRAM). While it runs, Windows is kept from sleeping; closing the lid still follows your power settings. Without a W&B login it logs offline to `wandb/`, which `wandb sync` uploads later.
-
-## Evaluation
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\eval_windows.ps1
-```
-
-This samples 3 replies (temperature 0.8) to every held-out test prompt with the untrained model and with the newest SFT adapter, then writes `outputs/eval/report.md`:
-
-| column | what it measures |
-|---|---|
-| P(me) | a character n-gram classifier trained on your messages vs the other person's, averaged over the replies; "real replies" is the ceiling |
-| style gap | mean standardized difference from your real test replies on 9 features (length, lines, emoji, lowercase start, end punctuation, questions, elongated words like "youuu", all-caps words) |
-| reply ppl | perplexity of your real test replies under the model |
-| chatbot | share of replies with assistant phrases ("I'm sorry, but", "How can I help") |
-| exact / 6-gram copy | share of replies copied from training replies, whole or as a 6-word run |
-| distinct | share of unique replies (low means it falls back to one stock reply) |
-
-Test replies are later in time than anything in training. Generations and scores stay in `outputs/eval/<model>/` (git-ignored, they contain chat text); `echolm eval run --score-only` re-scores without the GPU.
+Real exports, processed data, adapters, generations and W&B sample tables stay out of git (`.gitignore`), and nothing is uploaded unless you log in to W&B, which then receives metrics only. A model trained on a real chat has read the other person's messages too: keep it private. The repository ships only synthetic data.
 
 ## Development
 
 ```bash
+pip install -e ".[dev,eval,demo]"
 pytest
 ruff check .
 ```
 
-See [ATTRIBUTION.md](ATTRIBUTION.md) for credits.
+The end-to-end tests (SFT data path, GRPO loop, eval sampling, demo) build a tiny random Qwen2 model on the fly and run on CPU in seconds; they need torch, transformers and peft and are skipped without them.
+
+EchoLM was inspired by WeClone; see [ATTRIBUTION.md](ATTRIBUTION.md). Design decisions and the measurements behind them: [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md).
