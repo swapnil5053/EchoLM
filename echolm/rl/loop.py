@@ -85,7 +85,7 @@ def make_optimizer(policy: Policy, cfg: GrpoConfig, total_steps: int):
     import torch
 
     params = [p for p in policy.model.parameters() if p.requires_grad]
-    if torch.cuda.is_available() and importlib.util.find_spec("bitsandbytes"):
+    if params[0].is_cuda and importlib.util.find_spec("bitsandbytes"):
         import bitsandbytes as bnb
 
         opt = bnb.optim.AdamW8bit(params, lr=cfg.lr, weight_decay=cfg.weight_decay)

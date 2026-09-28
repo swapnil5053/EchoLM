@@ -27,15 +27,15 @@ def training_section(grpo_info: dict, stats: dict) -> list[str]:
         "",
         f"- Data: {stats.get('windows', '?')} reply windows from 1:1 chats "
         f"({stats.get('splits', {})}), split by time so test replies are later than all training data.",
-        f"- SFT: LoRA on all attention and MLP projections, loss on the reply tokens only; the starting "
-        f"checkpoint was `{Path(grpo_info.get('init_adapter', '?')).name}`, the earliest within 3% of the "
-        "best val loss.",
+        "- SFT: LoRA on all attention and MLP projections, loss on the reply tokens only. GRPO started "
+        f"from `{Path(grpo_info.get('init_adapter', '?')).name}` (by default the earliest SFT checkpoint "
+        "within 3% of the best val loss).",
         f"- GRPO: {grpo_info.get('steps', '?')} steps, {cfg.get('prompts_per_step', '?')} prompts x "
         f"{cfg.get('num_generations', '?')} samples per step, lr {cfg.get('lr', '?')}, no KL term; "
         f"reward weights {cfg.get('weights', {})}.",
         f"- Selected GRPO step: {grpo_info.get('best_step', '?')} (val reward {best.get('reward', '?')}; "
         "step 0 is the SFT model, so GRPO is only kept if it beats it).",
-        f"- Hardware: one RTX 4060 Laptop GPU (8 GB), peak {grpo_info.get('peak_vram_gb', '?')} GB, "
+        f"- Hardware: {grpo_info.get('gpu', 'one GPU')}, peak {grpo_info.get('peak_vram_gb', '?')} GB, "
         f"{round(grpo_info.get('runtime_s', 0) / 60)} min.",
         "",
     ]

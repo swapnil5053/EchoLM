@@ -32,6 +32,8 @@ def fmt(value) -> str:
 
 def cell(metrics: dict, key: str) -> str:
     text = fmt(metrics.get(key))
+    if key == "median_words" and metrics.get(key) is not None:
+        text = f"{metrics[key]:g}"
     if key == "chrf" and metrics.get("chrf_ci"):
         lo, hi = metrics["chrf_ci"]
         text += f" ({lo:.3f}–{hi:.3f})"

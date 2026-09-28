@@ -92,6 +92,7 @@ def fit(cfg: GrpoConfig, data_dir: Path, out_dir: Path, steps: int, init: Path) 
         "init_adapter": str(init), "git_sha": git_sha(), "steps": steps, "best_step": best["step"],
         "best_val": best, "val_history": evaluate.history,
         "runtime_s": round(time.perf_counter() - start), "peak_vram_gb": round(peak, 2),
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
     })
     tracker.finish()
     log.info("best val reward %.4f at step %d (step 0 is the SFT starting point); adapter saved to %s",
