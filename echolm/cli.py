@@ -130,6 +130,28 @@ def train_sft_cmd(data: Path, out: Path, config_path: Path, max_steps: int, resu
     log.info("run saved to %s", out_dir)
 
 
+@train.command("grpo", help="GRPO on top of the selected SFT checkpoint with the style rewards.")
+@DATA
+@click.option("--out", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/grpo"))
+@click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path),
+              default=Path("configs/grpo.yaml"), show_default=True)
+@click.option("--init", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="adapter to start from (default: init_adapter in the config)")
+@click.option("--backend", type=click.Choice(["unsloth", "hf"]), default=None,
+              help="override the model backend from the config")
+@click.option("--max-steps", type=int, default=-1, help="stop after this many steps (smoke test)")
+def train_grpo_cmd(data: Path, out: Path, config_path: Path, init: Path | None, backend: str | None,
+                   max_steps: int) -> None:
+    from echolm.rl.config import load_grpo_config
+    from echolm.rl.train import train_grpo
+
+    cfg = load_grpo_config(config_path)
+    if backend:
+        cfg.backend = backend
+    out_dir = train_grpo(cfg, data, out, max_steps, init)
+    log.info("run saved to %s", out_dir)
+
+
 @cli.group("eval", help="Compare models on the held-out test split.")
 def eval_group() -> None:
     pass

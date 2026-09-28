@@ -1,0 +1,51 @@
+# GRPO stage: starts from the selected SFT checkpoint and optimizes the rewards in echolm/rl/rewards.py.
+# Sized for an 8 GB RTX 4060 laptop GPU; plain `model.generate`, no vLLM (not available on Windows).
+
+base_model: unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit
+# "unsloth" (fast kernels) or "hf" (plain transformers + peft); the Windows script falls back to hf
+backend: unsloth
+# "auto" = the SFT checkpoint `echolm train select` picks; or a path to any adapter folder
+init_adapter: auto
+max_seq_len: 1024
+# the few windows with longer prompts are skipped
+max_prompt_tokens: 768
+
+# 4 prompts x 4 sampled replies = 16 completions per step; advantages are relative within each 4
+num_generations: 4
+prompts_per_step: 4
+# your replies are short (median 3 words); 64 tokens is ~40 words
+max_new_tokens: 64
+temperature: 1.0
+top_p: 1.0
+
+# small, clipped updates: the SFT policy is already close, GRPO should adjust it, not rewrite it
+lr: 1.0e-5
+warmup_steps: 10
+weight_decay: 0.0
+max_grad_norm: 0.2
+# 200 x 4 = 800 prompts, about one pass over the training windows
+max_steps: 200
+# policy updates per batch of samples; above 1 the PPO-style ratio clipping becomes active
+num_iterations: 1
+clip_eps: 0.2
+# "group": (r - mean) / std within each prompt's group (GRPO); "none": only mean-centred (Dr. GRPO)
+scale_rewards: group
+
+# every eval samples one reply per val prompt, logs the reward parts, and saves a checkpoint;
+# the checkpoint with the highest val reward becomes the final adapter
+eval_steps: 25
+val_temperature: 0.8
+
+seed: 13
+report_to: wandb
+wandb_project: echolm
+
+# total reward = sum(weight x part). chrf/style/length are in [0, 1]; the rest are 0 or -1
+weights:
+  chrf: 1.0
+  style: 0.5
+  length: 0.5
+  duplicate: 0.5
+  copy: 1.0
+  chatbot: 1.0
+  empty: 1.0
