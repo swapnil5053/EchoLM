@@ -25,28 +25,6 @@ def test_score_writes_metrics(tmp_path):
     assert m["distinct"] == pytest.approx(1 / len(MINE), abs=0.001)
 
 
-def fake_unsloth(base):
-    import os
-    import types
-
-    from peft import PeftModel
-    from transformers import AutoModelForCausalLM
-    from transformers import AutoTokenizer
-
-    class Fast:
-        @staticmethod
-        def from_pretrained(model_name, max_seq_length, load_in_4bit, dtype):
-            tok = AutoTokenizer.from_pretrained(base)
-            model = AutoModelForCausalLM.from_pretrained(base)
-            if os.path.isdir(model_name) and os.path.exists(os.path.join(model_name, "adapter_config.json")):
-                model = PeftModel.from_pretrained(model, model_name)
-            return model, tok
-
-        for_inference = staticmethod(lambda m: m.eval())
-
-    return types.SimpleNamespace(FastLanguageModel=Fast)
-
-
 def test_generate_then_score_for_base_and_adapter(tmp_path, monkeypatch):
     pytest.importorskip("peft")
     import sys
@@ -54,6 +32,7 @@ def test_generate_then_score_for_base_and_adapter(tmp_path, monkeypatch):
     from echolm.eval.report import build_report
     from echolm.eval.run import generate
     from tests.tiny import DATA
+    from tests.tiny import fake_unsloth
     from tests.tiny import write_base_and_adapter
 
     base, adapter = write_base_and_adapter(tmp_path)

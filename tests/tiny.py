@@ -57,3 +57,35 @@ def write_base_and_adapter(root: Path) -> tuple[Path, Path]:
     lora.save_pretrained(adapter)
     tok.save_pretrained(adapter)
     return base, adapter
+
+
+def fake_unsloth(base: Path):
+    # stands in for `unsloth` on machines without a GPU: same FastLanguageModel surface, plain HF inside
+    import os
+    import types
+
+    from peft import LoraConfig
+    from peft import PeftModel
+    from peft import get_peft_model
+    from transformers import AutoModelForCausalLM
+    from transformers import AutoTokenizer
+
+    class Fast:
+        @staticmethod
+        def from_pretrained(model_name, max_seq_length, load_in_4bit, dtype):
+            tok = AutoTokenizer.from_pretrained(base)
+            name = str(model_name)
+            if os.path.exists(os.path.join(name, "adapter_config.json")):
+                return PeftModel.from_pretrained(AutoModelForCausalLM.from_pretrained(base), name), tok
+            return AutoModelForCausalLM.from_pretrained(name if os.path.isdir(name) else base), tok
+
+        @staticmethod
+        def get_peft_model(model, r, lora_alpha, lora_dropout, target_modules, bias, **kwargs):
+            cfg = LoraConfig(r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
+                             target_modules=target_modules, bias=bias, task_type="CAUSAL_LM")
+            return get_peft_model(model, cfg)
+
+        for_inference = staticmethod(lambda m: m.eval())
+        for_training = staticmethod(lambda m: m.train())
+
+    return types.SimpleNamespace(FastLanguageModel=Fast)

@@ -1,6 +1,5 @@
 import json
 import sys
-import types
 
 import pytest
 
@@ -11,7 +10,7 @@ from echolm.rl.policy import lora_settings  # noqa: E402
 from echolm.rl.train import resolve_init  # noqa: E402
 from echolm.rl.train import train_grpo  # noqa: E402
 from tests.tiny import DATA  # noqa: E402
-from tests.tiny import build_model  # noqa: E402
+from tests.tiny import fake_unsloth  # noqa: E402
 from tests.tiny import write_base_and_adapter  # noqa: E402
 
 
@@ -34,29 +33,6 @@ def test_grpo_runs_end_to_end_with_the_hf_backend(tmp_path, caplog):
     base, adapter = write_base_and_adapter(tmp_path)
     out = train_grpo(small_cfg(base, "hf"), DATA, tmp_path / "grpo", max_steps=3, init=adapter)
     check_run(out, 3)
-
-
-def fake_unsloth(base):
-    from peft import LoraConfig
-    from peft import get_peft_model
-    from transformers import AutoTokenizer
-
-    class Fast:
-        @staticmethod
-        def from_pretrained(model_name, max_seq_length, load_in_4bit, dtype):
-            tok = AutoTokenizer.from_pretrained(base)
-            return build_model(len(tok), seed=1), tok
-
-        @staticmethod
-        def get_peft_model(model, r, lora_alpha, lora_dropout, target_modules, bias, **kwargs):
-            return get_peft_model(model, LoraConfig(r=r, lora_alpha=lora_alpha, lora_dropout=lora_dropout,
-                                                    target_modules=target_modules, bias=bias,
-                                                    task_type="CAUSAL_LM"))
-
-        for_inference = staticmethod(lambda m: m.eval())
-        for_training = staticmethod(lambda m: m.train())
-
-    return types.SimpleNamespace(FastLanguageModel=Fast)
 
 
 def test_grpo_runs_with_the_unsloth_path_and_loads_sft_weights(tmp_path, monkeypatch, caplog):
