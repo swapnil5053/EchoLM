@@ -2,7 +2,7 @@
 
 Fine-tune a small LLM (Qwen 2.5 1.5B) to text like you, from your own WhatsApp and Telegram exports. SFT first, then GRPO with a style-consistency reward, evaluated against the base model on held-out chats. Built for an 8 GB laptop GPU.
 
-Status: data pipeline and SFT stage done (Windows). GRPO, evaluation and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
+Status: data pipeline, SFT and evaluation done (Windows). GRPO and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
 
 ## Quickstart (synthetic data, no GPU needed)
 
@@ -63,6 +63,25 @@ echolm train sft --resume outputs\sft\<run name>   # continue after a crash
 `configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, batch 4 x 4 accumulation. Loss is computed only on your reply tokens. Training starts with one eval of the untouched model as the baseline; every 20 steps it evaluates, saves a checkpoint, and prints greedy replies to 5 fixed val prompts next to what you actually said. The checkpoint with the lowest val loss is the one kept as the final adapter.
 
 Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer), `checkpoint-*/`, `train.log` and `run_info.json` (config, data hashes, git commit, token lengths, val loss per eval from the untrained baseline on, best val loss, peak VRAM). While it runs, Windows is kept from sleeping; closing the lid still follows your power settings. Without a W&B login it logs offline to `wandb/`, which `wandb sync` uploads later.
+
+## Evaluation
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\eval_windows.ps1
+```
+
+This samples 3 replies (temperature 0.8) to every held-out test prompt with the untrained model and with the newest SFT adapter, then writes `outputs/eval/report.md`:
+
+| column | what it measures |
+|---|---|
+| P(me) | a character n-gram classifier trained on your messages vs the other person's, averaged over the replies; "real replies" is the ceiling |
+| style gap | mean standardized difference from your real test replies on 9 features (length, lines, emoji, lowercase start, end punctuation, questions, elongated words like "youuu", all-caps words) |
+| reply ppl | perplexity of your real test replies under the model |
+| chatbot | share of replies with assistant phrases ("I'm sorry, but", "How can I help") |
+| exact / 6-gram copy | share of replies copied from training replies, whole or as a 6-word run |
+| distinct | share of unique replies (low means it falls back to one stock reply) |
+
+Test replies are later in time than anything in training. Generations and scores stay in `outputs/eval/<model>/` (git-ignored, they contain chat text); `echolm eval run --score-only` re-scores without the GPU.
 
 ## Development
 

@@ -1,0 +1,13 @@
+# Evaluation on the held-out test split. Every model gets the same prompts and sampling settings.
+
+base_model: unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit
+max_seq_len: 1024
+max_new_tokens: 64
+
+# sampled, not greedy: greedy decoding collapses onto the single most likely reply and hides
+# how varied the model's style really is. Three seeds per prompt, metrics are averaged.
+temperature: 0.8
+top_p: 0.9
+seeds: [1, 2, 3]
+
+classifier_seed: 13

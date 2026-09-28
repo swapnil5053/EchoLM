@@ -17,6 +17,7 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.5"]
 # install a CUDA build of torch first, see README
 train = ["unsloth", "wandb"]
+eval = ["scikit-learn"]
 
 [project.scripts]
 echolm = "echolm.cli:cli"
