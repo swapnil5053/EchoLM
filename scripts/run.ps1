@@ -1,0 +1,140 @@
+# EchoLM on Windows, from the repo root in PowerShell:
+#   powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Me "your name in the export"
+# Stages run in order: setup, data, sft, grpo, eval, card. Pick a subset with -Stages, e.g.
+#   -Stages grpo,eval,card
+# Add -SkipInstall once packages are in place, -RetrainSft to train SFT again even if a run exists.
+
+param(
+    [string]$Me = "",
+    [string[]]$Stages = @("setup", "data", "sft", "grpo", "eval", "card"),
+    [switch]$SkipInstall,
+    [switch]$RetrainSft
+)
+
+# native tools write progress to stderr; "Stop" would turn that into a fatal error in PowerShell 5.1,
+# so every step checks its exit code instead
+$ErrorActionPreference = "Continue"
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+Set-Location (Split-Path $PSScriptRoot -Parent)
+$Stages = @($Stages | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim().ToLower() })
+$started = Get-Date
+
+function Step([string]$Name, [scriptblock]$Cmd) {
+    Write-Host "`n=== $Name ===" -ForegroundColor Cyan
+    & $Cmd
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "FAILED: $Name (exit $LASTEXITCODE)" -ForegroundColor Red
+        exit 1
+    }
+}
+
+function Newest([string]$Dir, [string]$Filter, [string]$Inside) {
+    Get-ChildItem $Dir -Directory -Filter $Filter -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName $Inside) } |
+        Sort-Object LastWriteTime | Select-Object -Last 1
+}
+
+if (-not (Test-Path ".venv\Scripts\python.exe")) {
+    Step "create venv (python 3.12)" { py -3.12 -m venv .venv }
+}
+$py = (Resolve-Path ".venv\Scripts\python.exe").Path
+
+if ($Stages -contains "setup" -and -not $SkipInstall) {
+    Step "upgrade pip" { & $py -m pip install --upgrade pip }
+    Step "install CUDA torch" {
+        & $py -m pip install "torch>=2.8,<2.13" torchvision --index-url https://download.pytorch.org/whl/cu128
+    }
+    Step "install echolm" { & $py -m pip install -e ".[dev,train,eval,demo]" }
+    $cuda = & $py -c "import torch; print(torch.cuda.is_available())"
+    if ($cuda -ne "True") {
+        # unsloth's dependencies can pull a CPU-only torch from PyPI; put the CUDA build back
+        $ver = & $py -c "import torch; print(torch.__version__.split('+')[0])"
+        Step "restore CUDA torch $ver" {
+            & $py -m pip install --force-reinstall --no-deps "torch==$ver" --index-url https://download.pytorch.org/whl/cu128
+        }
+    }
+    Write-Host "`n=== unit tests (not blocking) ===" -ForegroundColor Cyan
+    & $py -m pytest -q
+    if ($LASTEXITCODE -ne 0) { Write-Host "some tests failed, continuing" -ForegroundColor Yellow }
+}
+
+if ($Stages -contains "data") {
+    if ($Me -eq "") { Write-Host "-Me is required for the data stage" -ForegroundColor Red; exit 1 }
+    $exports = @(Get-ChildItem exports -File -Include *.txt, *.json -Recurse -ErrorAction SilentlyContinue)
+    if ($exports.Count -eq 0) { Write-Host "no .txt or .json exports in exports\" -ForegroundColor Red; exit 1 }
+    foreach ($f in $exports) {
+        Step "parse $($f.Name)" { & $py -m echolm.cli parse $f.FullName --me $Me }
+    }
+    Step "build dataset" { & $py -m echolm.cli format --config configs/default.yaml }
+}
+
+if ($Stages -contains "sft") {
+    if ($RetrainSft -or -not (Newest "outputs\sft" "sft-r*" "run_info.json")) {
+        Step "preflight" { & $py -m echolm.cli train check }
+        Write-Host "`n=== SFT smoke test (10 steps) ===" -ForegroundColor Cyan
+        & $py -m echolm.cli train sft --max-steps 10
+        if ($LASTEXITCODE -ne 0) {
+            # the usual Windows failure is Unsloth's triton compilation; uncompiled is slower but works
+            Write-Host "retrying with UNSLOTH_COMPILE_DISABLE=1" -ForegroundColor Yellow
+            $env:UNSLOTH_COMPILE_DISABLE = "1"
+            Step "SFT smoke test, no compile" { & $py -m echolm.cli train sft --max-steps 10 }
+        }
+        Step "SFT" { & $py -m echolm.cli train sft }
+    } else {
+        Write-Host "`n=== SFT: reusing the newest finished run (add -RetrainSft to train again) ===" -ForegroundColor Cyan
+    }
+}
+
+$sftCkpt = (& $py -m echolm.cli train select | Select-Object -Last 1)
+if ($LASTEXITCODE -ne 0 -and ($Stages -contains "grpo" -or $Stages -contains "eval")) {
+    Write-Host "no SFT run to build on; run the sft stage first" -ForegroundColor Red
+    exit 1
+}
+if ($sftCkpt) { Write-Host "SFT checkpoint: $sftCkpt" }
+
+if ($Stages -contains "grpo") {
+    $backend = "unsloth"
+    Write-Host "`n=== GRPO smoke test (3 steps) ===" -ForegroundColor Cyan
+    & $py -m echolm.cli train grpo --init $sftCkpt --max-steps 3
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "unsloth backend failed, retrying with plain transformers + peft" -ForegroundColor Yellow
+        $backend = "hf"
+        Step "GRPO smoke test, hf backend" { & $py -m echolm.cli train grpo --init $sftCkpt --max-steps 3 --backend hf }
+    }
+    Step "GRPO ($backend backend)" { & $py -m echolm.cli train grpo --init $sftCkpt --backend $backend }
+}
+
+if ($Stages -contains "eval") {
+    # the base model never changes, so its samples are kept and only re-scored
+    if (Test-Path "outputs\eval\base\generations.jsonl") {
+        Step "score base model" { & $py -m echolm.cli eval run --model base --name base --score-only }
+    } else {
+        Step "evaluate base model" { & $py -m echolm.cli eval run --model base --name base }
+    }
+    Step "evaluate SFT" { & $py -m echolm.cli eval run --model $sftCkpt --name sft }
+    $grpo = Newest "outputs\grpo" "grpo-run-*" "adapter"
+    if ($grpo) {
+        $adapter = Join-Path $grpo.FullName "adapter"
+        Step "evaluate GRPO" { & $py -m echolm.cli eval run --model $adapter --name grpo }
+    }
+    # older comparison rows (e.g. other SFT checkpoints) are re-scored with the current metrics
+    Get-ChildItem outputs\eval -Directory | Where-Object {
+        @("base", "sft", "grpo") -notcontains $_.Name -and (Test-Path (Join-Path $_.FullName "generations.jsonl"))
+    } | ForEach-Object {
+        # not $name: PowerShell variables ignore case and Step's own $Name would shadow it
+        $row = $_.Name
+        Step "re-score $row" { & $py -m echolm.cli eval run --model $row --name $row --score-only }
+    }
+    Step "report" { & $py -m echolm.cli eval report --readme README.md }
+}
+
+if ($Stages -contains "card") {
+    if (Newest "outputs\grpo" "grpo-run-*" "adapter") {
+        Step "model card" { & $py -m echolm.cli card }
+    }
+}
+
+$mins = [math]::Round(((Get-Date) - $started).TotalMinutes)
+Write-Host "`nDone in $mins min. Report: outputs\eval\report.md (also in README.md)." -ForegroundColor Green
+Write-Host "Chat with the models: .venv\Scripts\echolm demo" -ForegroundColor Green
