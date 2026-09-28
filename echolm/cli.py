@@ -99,6 +99,21 @@ def train_check_cmd(data: Path, config_path: Path) -> None:
         raise click.ClickException("preflight failed, fix the FAIL lines above")
 
 
+@train.command("select", help="Print the SFT checkpoint to build on (earliest within tolerance of the best).")
+@click.option("--run", "run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="SFT run folder (default: newest in outputs/sft)")
+@click.option("--tol", type=float, default=0.03, show_default=True)
+def train_select_cmd(run_dir: Path | None, tol: float) -> None:
+    from echolm.train.select import newest_run
+    from echolm.train.select import select_checkpoint
+
+    try:
+        path = select_checkpoint(run_dir or newest_run(Path("outputs/sft")), tol)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(str(path))
+
+
 @train.command("sft", help="Supervised fine-tuning with LoRA on the formatted windows.")
 @DATA
 @click.option("--out", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/sft"))
