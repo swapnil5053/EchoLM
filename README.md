@@ -2,7 +2,7 @@
 
 Fine-tune a small LLM (Qwen 2.5 1.5B) to text like you, from your own WhatsApp and Telegram exports. SFT first, then GRPO with a style-consistency reward, evaluated against the base model on held-out chats. Built for an 8 GB laptop GPU.
 
-Status: data pipeline and SFT stage done. GRPO, evaluation and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
+Status: data pipeline and SFT stage done (Windows). GRPO, evaluation and demo are in progress. See [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md) for the design.
 
 ## Quickstart (synthetic data, no GPU needed)
 
@@ -42,19 +42,27 @@ Put exports in `exports/` and parsed/processed files stay in `data/`; both are g
 
 ## Training (SFT)
 
-Needs an NVIDIA GPU. Tested target: RTX 4060 Laptop, 8 GB, Windows or Linux, Python 3.12.
+EchoLM targets Windows with an NVIDIA GPU (built on an RTX 4060 Laptop, 8 GB), Python 3.12 and PowerShell. Put your exports in `exports/`, plug in the charger, close browsers and other GPU apps, then from the repo root:
 
-```bash
-pip install "torch>=2.8,<2.13" torchvision --index-url https://download.pytorch.org/whl/cu128
-pip install -e ".[train]"
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"   # must print True
-wandb login          # or set report_to: none in configs/sft.yaml
-echolm train sft
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\train_windows.ps1 -Me "your name as it appears in the export"
 ```
 
-`configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, loss only on your reply. Before training it runs one eval on the base model so the first val loss and sample replies are the baseline. Every 20 steps it evaluates, prints greedy replies to 5 fixed val prompts next to what you actually said, and keeps the checkpoint with the lowest val loss.
+The script creates `.venv` if needed, installs a CUDA build of torch plus Unsloth, re-parses every export, rebuilds the dataset, runs `echolm train check`, does a 10-step smoke run of the whole loop, then the full run. It stops at the first failing step and says which one. Add `-SkipInstall` on later runs.
 
-Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer) and `run_info.json` (config, data hashes, git commit, token lengths, best val loss, peak VRAM). Close browsers and other GPU apps first; the budget assumes most of the 8 GB is free.
+The same steps by hand:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+echolm train check               # GPU, packages, data, disk, W&B
+echolm train sft --max-steps 10  # smoke test
+echolm train sft                 # full run
+echolm train sft --resume outputs\sft\<run name>   # continue after a crash
+```
+
+`configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, batch 4 x 4 accumulation. Loss is computed only on your reply tokens. Training starts with one eval of the untouched model as the baseline; every 20 steps it evaluates, saves a checkpoint, and prints greedy replies to 5 fixed val prompts next to what you actually said. The checkpoint with the lowest val loss is the one kept as the final adapter.
+
+Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer), `checkpoint-*/`, `train.log` and `run_info.json` (config, data hashes, git commit, token lengths, best val loss, peak VRAM). While it runs, Windows is kept from sleeping; closing the lid still follows your power settings. Without a W&B login it logs offline to `wandb/`, which `wandb sync` uploads later.
 
 ## Development
 

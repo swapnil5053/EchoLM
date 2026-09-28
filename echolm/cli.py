@@ -113,3 +113,7 @@ def train_sft_cmd(data: Path, out: Path, config_path: Path, max_steps: int, resu
 
     out_dir = train_sft(load_sft_config(config_path), data, out, max_steps, resume)
     log.info("run saved to %s", out_dir)
+
+
+if __name__ == "__main__":
+    cli()
