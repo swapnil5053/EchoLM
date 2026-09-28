@@ -4,8 +4,6 @@ from pathlib import Path
 
 from echolm.data.io import read_jsonl
 from echolm.data.io import write_jsonl
-from echolm.eval.authorship import held_out_accuracy
-from echolm.eval.authorship import train_classifier
 from echolm.eval.config import EvalConfig
 from echolm.eval.generate import generate_all
 from echolm.eval.generate import load
@@ -34,15 +32,13 @@ def generate(model_ref: str, data_dir: Path, run_dir: Path, cfg: EvalConfig) -> 
 
 def score(data_dir: Path, run_dir: Path, cfg: EvalConfig) -> dict:
     windows = read_jsonl(data_dir / "windows.jsonl")
-    clf = train_classifier(windows, cfg.classifier_seed)
-    metrics = score_generations(read_jsonl(run_dir / "generations.jsonl"), windows, clf)
+    metrics = score_generations(read_jsonl(run_dir / "generations.jsonl"), windows, cfg.classifier_seed)
     nll_path = run_dir / "nll.json"
     if nll_path.exists():
         metrics.update(json.loads(nll_path.read_text(encoding="utf-8")))
-    metrics["classifier_accuracy"] = held_out_accuracy(clf, windows)
-    metrics["reference"] = score_reference(windows, clf)
+    metrics["reference"] = score_reference(windows, cfg.classifier_seed)
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    log.info("%s: p_me %s, style_gap %s, chatbot %s, ngram_copy %s, distinct %s", run_dir.name,
-             metrics["p_me"], metrics["style_gap"], metrics["chatbot_rate"], metrics["ngram_copy"],
-             metrics["distinct"])
+    log.info("%s: detect_auc %s, chrf %s, style_gap %s, distinct %s, ngram_copy %s", run_dir.name,
+             metrics["detect_auc"], metrics["chrf"], metrics["style_gap"], metrics["distinct"],
+             metrics["ngram_copy"])
     return metrics

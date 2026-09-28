@@ -1,63 +1,98 @@
 import json
 import logging
+import re
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# (key, header, description); † marks metrics that are also GRPO rewards on the training data
 COLUMNS = [
-    ("p_me", "P(me) ↑", "authorship classifier: average probability that you wrote the reply"),
-    ("style_gap", "style gap ↓", "mean standardized difference from your real replies on 9 style features"),
+    ("detect_auc", "detect AUC ↓", "cross-validated classifier telling your real replies from the model's; "
+     "0.5 = cannot tell them apart. Not optimized by any reward"),
+    ("chrf", "chrF ↑ †", "character n-gram F-score against what you actually replied to the same message "
+     "(95% bootstrap interval over prompts)"),
+    ("style_gap", "style gap ↓ †", "mean standardized difference from your real replies on 9 style features"),
     ("reply_ppl", "reply ppl ↓", "perplexity of your real test replies under the model"),
-    ("chatbot_rate", "chatbot ↓", "share of replies with assistant phrases (\"I'm sorry, but\" ...)"),
-    ("exact_copy", "exact copy ↓", "share of 4+ word replies identical to a training reply"),
-    ("ngram_copy", "6-gram copy ↓", "share of 6+ word replies sharing a 6-word run with a training reply"),
-    ("distinct", "distinct ↑", "share of replies that are unique"),
+    ("distinct", "distinct ↑", "share of unique replies; low means it falls back on stock replies"),
+    ("ngram_copy", "6-gram copy ↓ †", "share of 6+ word replies sharing a 6-word run with a training reply"),
+    ("chatbot_rate", "chatbot ↓ †", "share of replies with assistant phrases (\"I'm sorry, but\" ...)"),
     ("median_words", "median words", "reply length"),
 ]
+STAGES = ("base", "sft", "grpo")
+START, END = "<!-- results:start -->", "<!-- results:end -->"
 
 
 def fmt(value) -> str:
     if value is None:
         return "–"
-    return f"{value:.3f}" if isinstance(value, float) else str(value)
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    return str(value)
+
+
+def cell(metrics: dict, key: str) -> str:
+    text = fmt(metrics.get(key))
+    if key == "chrf" and metrics.get("chrf_ci"):
+        lo, hi = metrics["chrf_ci"]
+        text += f" ({lo:.3f}–{hi:.3f})"
+    if key == "detect_auc" and metrics.get("detect_auc_sd"):
+        text += f" ±{metrics['detect_auc_sd']:.3f}"
+    return text
 
 
 def load_runs(root: Path) -> dict[str, dict]:
-    runs = {}
-    for path in sorted(root.glob("*/metrics.json")):
-        runs[path.parent.name] = json.loads(path.read_text(encoding="utf-8"))
+    paths = sorted(root.glob("*/metrics.json"))
+    runs = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in paths}
     if not runs:
         raise ValueError(f"no metrics.json under {root}; run `echolm eval run` first")
     return runs
 
 
 def order(names: list[str]) -> list[str]:
-    return sorted(names, key=lambda n: (n != "base", n))
+    def key(name: str) -> tuple:
+        stage = next((i for i, s in enumerate(STAGES) if name.startswith(s)), len(STAGES))
+        return stage, name
+
+    return sorted(names, key=key)
+
+
+def table(runs: dict[str, dict]) -> str:
+    names = order(list(runs))
+    reference = runs[names[0]]["reference"]
+    lines = ["| model | " + " | ".join(c[1] for c in COLUMNS) + " |", "|" + "---|" * (len(COLUMNS) + 1)]
+    lines += [f"| {n} | " + " | ".join(cell(runs[n], c[0]) for c in COLUMNS) + " |" for n in names]
+    lines.append("| your real replies | " + " | ".join(cell(reference, c[0]) for c in COLUMNS) + " |")
+    return "\n".join(lines)
 
 
 def build_report(root: Path) -> str:
     runs = load_runs(root)
-    names = order(list(runs))
-    reference = runs[names[0]]["reference"]
-    head = "| model | " + " | ".join(c[1] for c in COLUMNS) + " |"
-    lines = [head, "|" + "---|" * (len(COLUMNS) + 1)]
-    for name in names:
-        lines.append(f"| {name} | " + " | ".join(fmt(runs[name].get(c[0])) for c in COLUMNS) + " |")
-    lines.append("| real replies | " + " | ".join(fmt(reference.get(c[0])) for c in COLUMNS) + " |")
-    n = runs[names[0]]["per_seed"]
-    first = n[next(iter(n))]["n"]
-    acc = runs[names[0]].get("classifier_accuracy")
-    notes = [f"- {label}: {desc}" for _, label, desc in COLUMNS]
+    first = runs[order(list(runs))[0]]
+    seeds = first["per_seed"]
+    n = seeds[next(iter(seeds))]["n"]
+    notes = [f"- **{label}**: {desc}" for _, label, desc in COLUMNS]
     return "\n".join([
-        "# EchoLM evaluation", "",
-        f"{first} held-out test replies, {len(n)} sampled replies each. "
-        f"Authorship classifier balanced accuracy on held-out real messages: {fmt(acc)}.", "",
-        *lines, "", *notes, "",
+        f"{n} held-out test replies (later in time than all training data), {len(seeds)} sampled "
+        "replies each at temperature 0.8. † = also a GRPO reward on the training split.", "",
+        table(runs), "", *notes, "",
     ])
 
 
-def write_report(root: Path) -> Path:
+def update_readme(readme: Path, body: str) -> None:
+    text = readme.read_text(encoding="utf-8")
+    if START not in text or END not in text:
+        raise ValueError(f"{readme} has no {START} / {END} markers")
+    pattern = re.compile(re.escape(START) + ".*?" + re.escape(END), re.DOTALL)
+    readme.write_text(pattern.sub(lambda _: f"{START}\n{body}\n{END}", text), encoding="utf-8")
+
+
+def write_report(root: Path, readme: Path | None = None) -> Path:
+    body = build_report(root)
     path = root / "report.md"
-    path.write_text(build_report(root), encoding="utf-8")
+    path.write_text("# EchoLM evaluation\n\n" + body, encoding="utf-8")
+    (root / "report.json").write_text(json.dumps(load_runs(root), indent=2), encoding="utf-8")
+    if readme is not None:
+        update_readme(readme, body)
+        log.info("results table updated in %s", readme)
     log.info("report written to %s", path)
     return path

@@ -182,11 +182,13 @@ def eval_run_cmd(model_ref: str, name: str, data: Path, out: Path, config_path: 
 @eval_group.command("report", help="Write outputs/eval/report.md comparing every scored model.")
 @click.option("--out", type=click.Path(exists=True, file_okay=False, path_type=Path),
               default=Path("outputs/eval"))
-def eval_report_cmd(out: Path) -> None:
+@click.option("--readme", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None,
+              help="also replace the results table between the markers in this README")
+def eval_report_cmd(out: Path, readme: Path | None) -> None:
     from echolm.eval.report import write_report
 
     try:
-        path = write_report(out)
+        path = write_report(out, readme)
     except ValueError as e:
         raise click.ClickException(str(e)) from e
     click.echo(path.read_text(encoding="utf-8"))
