@@ -76,3 +76,13 @@ class VramCallback(TrainerCallback):
         if torch.cuda.is_available():
             self.peak_gb = max(self.peak_gb, torch.cuda.max_memory_reserved() / 2**30)
             log.info("step %d peak vram %.2f GB", state.global_step, self.peak_gb)
+
+
+class EvalLogCallback(TrainerCallback):
+    def __init__(self):
+        self.history = []
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if metrics and "eval_loss" in metrics:
+            self.history.append([state.global_step, round(metrics["eval_loss"], 4)])
+            log.info("step %d eval_loss %.4f", state.global_step, metrics["eval_loss"])

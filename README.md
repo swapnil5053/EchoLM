@@ -62,7 +62,7 @@ echolm train sft --resume outputs\sft\<run name>   # continue after a crash
 
 `configs/sft.yaml` holds the settings: Qwen2.5-1.5B-Instruct in 4-bit, LoRA rank 16 on all projections, 3 epochs, batch 4 x 4 accumulation. Loss is computed only on your reply tokens. Training starts with one eval of the untouched model as the baseline; every 20 steps it evaluates, saves a checkpoint, and prints greedy replies to 5 fixed val prompts next to what you actually said. The checkpoint with the lowest val loss is the one kept as the final adapter.
 
-Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer), `checkpoint-*/`, `train.log` and `run_info.json` (config, data hashes, git commit, token lengths, best val loss, peak VRAM). While it runs, Windows is kept from sleeping; closing the lid still follows your power settings. Without a W&B login it logs offline to `wandb/`, which `wandb sync` uploads later.
+Each run goes to `outputs/sft/<run name>/`: `adapter/` (LoRA weights + tokenizer), `checkpoint-*/`, `train.log` and `run_info.json` (config, data hashes, git commit, token lengths, val loss per eval from the untrained baseline on, best val loss, peak VRAM). While it runs, Windows is kept from sleeping; closing the lid still follows your power settings. Without a W&B login it logs offline to `wandb/`, which `wandb sync` uploads later.
 
 ## Development
 

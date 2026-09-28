@@ -29,6 +29,7 @@ class SftConfig:
     sample_max_new_tokens: int = 64
     seed: int = 13
     report_to: str = "wandb"
+    wandb_samples: bool = False
     wandb_project: str = "echolm"
 
 

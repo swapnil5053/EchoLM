@@ -98,16 +98,18 @@ def prepare(cfg: SftConfig, data_dir: Path, tok) -> tuple[list[dict], list[dict]
     return train, val, report
 
 
-def run_info(cfg, data_dir: Path, report: dict, trainer, result, peak_gb: float) -> dict:
+def run_info(cfg, data_dir: Path, report: dict, trainer, result, peak_gb: float, evals: list) -> dict:
     return {
         "config": asdict(cfg), "git_sha": git_sha(),
         "data": {"train_hash": file_hash(data_dir / "train_sft.jsonl"),
                  "val_hash": file_hash(data_dir / "val_sft.jsonl"), **report},
+        "baseline_eval_loss": evals[0][1] if evals else None,
         "best_eval_loss": trainer.state.best_metric,
         "best_checkpoint": trainer.state.best_model_checkpoint,
         "steps": trainer.state.global_step,
         "train_runtime_s": round(result.metrics["train_runtime"]),
         "peak_vram_gb": round(peak_gb, 2),
+        "eval_history": evals,
     }
 
 
@@ -137,6 +139,7 @@ def fit(cfg: SftConfig, data_dir: Path, out_dir: Path, max_steps: int, resume: b
     model, tok, fast = load_model(cfg)
     import torch
 
+    from echolm.train.callbacks import EvalLogCallback
     from echolm.train.callbacks import SampleCallback
     from echolm.train.callbacks import VramCallback
     from echolm.train.callbacks import pick_samples
@@ -144,14 +147,16 @@ def fit(cfg: SftConfig, data_dir: Path, out_dir: Path, max_steps: int, resume: b
     train, val, report = prepare(cfg, data_dir, tok)
     precision = "bf16" if torch.cuda.is_bf16_supported() else "fp16"
     samples = SampleCallback(tok, pick_samples(val, cfg.n_samples, cfg.seed), cfg.sample_max_new_tokens,
-                             cfg.report_to == "wandb", fast.for_inference, fast.for_training)
+                             cfg.report_to == "wandb" and cfg.wandb_samples,
+                             fast.for_inference, fast.for_training)
     vram = VramCallback()
     args = train_args(cfg, out_dir, len(train), precision, max_steps)
-    trainer = build_trainer(model, tok, args, train, val, [samples, vram])
+    evals = EvalLogCallback()
+    trainer = build_trainer(model, tok, args, train, val, [evals, samples, vram])
     result = trainer.train(resume_from_checkpoint=resume or None)
     trainer.save_model(str(out_dir / "adapter"))
     tok.save_pretrained(str(out_dir / "adapter"))
-    info = run_info(cfg, data_dir, report, trainer, result, vram.peak_gb)
+    info = run_info(cfg, data_dir, report, trainer, result, vram.peak_gb, evals.history)
     (out_dir / "run_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
     log.info("best eval loss %s at %s", info["best_eval_loss"], info["best_checkpoint"])
     log.info("adapter saved to %s", out_dir / "adapter")

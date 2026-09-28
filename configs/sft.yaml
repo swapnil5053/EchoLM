@@ -34,4 +34,7 @@ sample_max_new_tokens: 64
 seed: 13
 # "wandb" falls back to offline logging (sync later with `wandb sync`) if you are not logged in
 report_to: wandb
+# sample replies contain real chat text (yours and the other person's); keep them in the local
+# train.log only unless the W&B project is private and you are fine uploading them
+wandb_samples: false
 wandb_project: echolm
