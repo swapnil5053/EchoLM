@@ -45,15 +45,14 @@ def bubbles(reply: str) -> list[str]:
 
 class ModelBank:
     def __init__(self, base_model: str, adapters: dict[str, Path]):
-        import torch
         from peft import PeftModel
         from transformers import AutoModelForCausalLM
         from transformers import AutoTokenizer
 
-        cuda = torch.cuda.is_available()
-        kwargs = {"device_map": {"": 0}} if cuda else {}
+        from echolm.rl.policy import hf_load_kwargs
+
         self.tok = AutoTokenizer.from_pretrained(base_model)
-        model = AutoModelForCausalLM.from_pretrained(base_model, **kwargs)
+        model = AutoModelForCausalLM.from_pretrained(base_model, **hf_load_kwargs())
         self.names = [BASE]
         for name, path in adapters.items():
             if isinstance(model, PeftModel):

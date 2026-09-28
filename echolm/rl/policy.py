@@ -62,14 +62,10 @@ def to_train(model) -> None:
     model.train()
 
 
-def load_hf(cfg: GrpoConfig, adapter: Path) -> Policy:
+def hf_load_kwargs() -> dict:
     import torch
     import transformers
     from packaging.version import Version
-    from peft import PeftModel
-    from peft import prepare_model_for_kbit_training
-    from transformers import AutoModelForCausalLM
-    from transformers import AutoTokenizer
 
     cuda = torch.cuda.is_available()
     # renamed from torch_dtype in transformers 4.56
@@ -77,7 +73,16 @@ def load_hf(cfg: GrpoConfig, adapter: Path) -> Policy:
     kwargs = {dtype_key: torch.bfloat16 if cuda else torch.float32}
     if cuda:
         kwargs["device_map"] = {"": 0}
-    model = AutoModelForCausalLM.from_pretrained(cfg.base_model, **kwargs)
+    return kwargs
+
+
+def load_hf(cfg: GrpoConfig, adapter: Path) -> Policy:
+    from peft import PeftModel
+    from peft import prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM
+    from transformers import AutoTokenizer
+
+    model = AutoModelForCausalLM.from_pretrained(cfg.base_model, **hf_load_kwargs())
     if getattr(model, "is_loaded_in_4bit", False):
         model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     model = PeftModel.from_pretrained(model, str(adapter), is_trainable=True)

@@ -66,11 +66,11 @@ class Evaluator:
 
 
 def fit(cfg: GrpoConfig, data_dir: Path, out_dir: Path, steps: int, init: Path) -> None:
+    policy = load_policy(cfg, init)
     import torch
 
     random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
-    policy = load_policy(cfg, init)
     ctx = reward_context(data_dir)
     train = encode(read_jsonl(data_dir / "grpo.jsonl"), policy.tok, cfg.max_prompt_tokens)
     val = encode(val_rows(data_dir), policy.tok, cfg.max_prompt_tokens)
