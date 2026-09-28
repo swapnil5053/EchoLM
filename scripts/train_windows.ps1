@@ -59,7 +59,14 @@ foreach ($f in $exports) {
 }
 Step "build dataset" { & $py -m echolm.cli format --config configs/default.yaml }
 Step "preflight" { & $py -m echolm.cli train check }
-Step "smoke test (10 steps)" { & $py -m echolm.cli train sft --max-steps 10 }
+Write-Host "`n=== smoke test (10 steps) ===" -ForegroundColor Cyan
+& $py -m echolm.cli train sft --max-steps 10
+if ($LASTEXITCODE -ne 0) {
+    # the usual Windows failure is Unsloth's triton compilation; the uncompiled path is slower but works
+    Write-Host "smoke test failed, retrying with UNSLOTH_COMPILE_DISABLE=1" -ForegroundColor Yellow
+    $env:UNSLOTH_COMPILE_DISABLE = "1"
+    Step "smoke test, no compile" { & $py -m echolm.cli train sft --max-steps 10 }
+}
 Step "full SFT run" { & $py -m echolm.cli train sft }
 
 Write-Host "`nDone. Results are in the newest outputs\sft\sft-r16-* folder (train.log, run_info.json, adapter\)." -ForegroundColor Green
