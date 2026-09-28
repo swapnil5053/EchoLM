@@ -1,7 +1,7 @@
 # SFT stage. Sized for ~900 train windows on an 8 GB RTX 4060 laptop GPU.
 
 model: unsloth/Qwen2.5-1.5B-Instruct-bnb-4bit
-# ~512 tokens of context + short replies; windows longer than this are counted and truncated
+# ~512 tokens of context + short replies; longer windows are dropped (never truncated)
 max_seq_len: 1024
 
 # rank 16 rather than the ADR's 64: under 2k windows, a bigger adapter mostly memorizes
@@ -10,24 +10,28 @@ lora_alpha: 16
 lora_dropout: 0.0
 lora_targets: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 
-# 8 x 2 = 16 windows per step, ~55 steps per epoch
+# 4 x 4 = 16 windows per optimizer step, ~55 steps per epoch.
+# batch 4 rather than 8 keeps peak memory well under 8 GB with a browser still open
 epochs: 3.0
-batch_size: 8
-grad_accum: 2
+batch_size: 4
+grad_accum: 4
+# eval computes full-vocab logits (151k), so it gets a smaller batch than training
+eval_batch_size: 2
 lr: 2.0e-4
 warmup_ratio: 0.05
 weight_decay: 0.01
 
-# the checkpoint with the lowest val loss is kept, not the last one
+# every eval also saves a checkpoint; the one with the lowest val loss is loaded at the end.
+# LoRA checkpoints are small, so all are kept (null) and a crash can resume from the last one
 eval_steps: 20
 log_steps: 5
-save_total_limit: 2
+save_total_limit: null
 
 # greedy replies to a few fixed val prompts at every eval, so you can read what it learned
 n_samples: 5
 sample_max_new_tokens: 64
 
 seed: 13
-# "none" to train without a W&B account
+# "wandb" falls back to offline logging (sync later with `wandb sync`) if you are not logged in
 report_to: wandb
 wandb_project: echolm

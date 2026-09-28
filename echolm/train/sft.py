@@ -1,9 +1,9 @@
 import json
 import logging
-import os
-import subprocess
+import math
 import time
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 
 from echolm.train.config import SftConfig
@@ -11,12 +11,17 @@ from echolm.train.data import drop_too_long
 from echolm.train.data import file_hash
 from echolm.train.data import length_report
 from echolm.train.data import load_split
-from echolm.train.data import token_lengths
+from echolm.train.data import model_columns
+from echolm.train.data import pad_batch
+from echolm.train.runtime import git_sha
+from echolm.train.runtime import keep_awake
+from echolm.train.runtime import log_to_file
+from echolm.train.runtime import setup_wandb
 
 log = logging.getLogger(__name__)
 
-# torch / transformers / trl are imported inside functions: unsloth has to be imported before
-# them so its patches apply, and `echolm parse` / `format` shouldn't pay for a torch import
+# torch / transformers are imported inside functions: unsloth has to be imported before them
+# so its patches apply, and `echolm parse` / `format` shouldn't pay for a torch import
 
 
 def load_model(cfg: SftConfig):
@@ -30,60 +35,67 @@ def load_model(cfg: SftConfig):
         target_modules=cfg.lora_targets, bias="none",
         use_gradient_checkpointing="unsloth", random_state=cfg.seed,
     )
+    if tok.pad_token_id is None:
+        tok.pad_token = tok.eos_token
     return model, tok, FastLanguageModel
 
 
-def sft_args(cfg: SftConfig, out_dir: Path, run_name: str, precision: str) -> dict:
+def warmup_steps(n_train: int, cfg: SftConfig, max_steps: int) -> int:
+    per_epoch = math.ceil(n_train / (cfg.batch_size * cfg.grad_accum))
+    total = max_steps if max_steps > 0 else math.ceil(per_epoch * cfg.epochs)
+    return max(1, round(cfg.warmup_ratio * total))
+
+
+def train_args(cfg: SftConfig, out_dir: Path, n_train: int, precision: str, max_steps: int = -1) -> dict:
+    eval_steps = min(cfg.eval_steps, max_steps) if max_steps > 0 else cfg.eval_steps
     return {
-        "output_dir": str(out_dir), "run_name": run_name, "seed": cfg.seed,
-        "num_train_epochs": cfg.epochs, "learning_rate": cfg.lr,
-        "per_device_train_batch_size": cfg.batch_size, "per_device_eval_batch_size": cfg.batch_size,
+        "output_dir": str(out_dir), "run_name": out_dir.name, "seed": cfg.seed,
+        "num_train_epochs": cfg.epochs, "max_steps": max_steps, "learning_rate": cfg.lr,
+        "per_device_train_batch_size": cfg.batch_size, "per_device_eval_batch_size": cfg.eval_batch_size,
         "gradient_accumulation_steps": cfg.grad_accum,
-        "lr_scheduler_type": "cosine", "warmup_ratio": cfg.warmup_ratio,
+        "lr_scheduler_type": "cosine", "warmup_steps": warmup_steps(n_train, cfg, max_steps),
         "weight_decay": cfg.weight_decay, "optim": "adamw_8bit",
-        "logging_steps": cfg.log_steps,
-        "eval_strategy": "steps", "eval_steps": cfg.eval_steps,
-        "save_strategy": "steps", "save_steps": cfg.eval_steps, "save_total_limit": cfg.save_total_limit,
+        "logging_steps": cfg.log_steps, "logging_first_step": True,
+        "eval_strategy": "steps", "eval_steps": eval_steps, "eval_on_start": True,
+        "save_strategy": "steps", "save_steps": eval_steps, "save_total_limit": cfg.save_total_limit,
         "load_best_model_at_end": True, "metric_for_best_model": "eval_loss", "greater_is_better": False,
-        "max_length": cfg.max_seq_len, "completion_only_loss": True, "packing": False,
+        "prediction_loss_only": True, "remove_unused_columns": False,
+        "dataloader_num_workers": 0, "torch_empty_cache_steps": eval_steps,
         "bf16": precision == "bf16", "fp16": precision == "fp16",
-        "report_to": cfg.report_to, "dataset_num_proc": 1,
+        "report_to": cfg.report_to,
     }
+
+
+def collate(batch: list[dict], pad_id: int) -> dict:
+    import torch
+
+    return {k: torch.tensor(v) for k, v in pad_batch(batch, pad_id).items()}
 
 
 def build_trainer(model, tok, args: dict, train: list[dict], val: list[dict], callbacks: list):
     from datasets import Dataset
-    from trl import SFTConfig
-    from trl import SFTTrainer
+    from transformers import Trainer
+    from transformers import TrainingArguments
 
-    def to_ds(rows):
-        return Dataset.from_list([{"prompt": r["prompt"], "completion": r["completion"]} for r in rows])
-
-    return SFTTrainer(model=model, processing_class=tok, args=SFTConfig(**args),
-                      train_dataset=to_ds(train), eval_dataset=to_ds(val), callbacks=callbacks)
+    return Trainer(
+        model=model, args=TrainingArguments(**args), processing_class=tok,
+        train_dataset=Dataset.from_list(model_columns(train)),
+        eval_dataset=Dataset.from_list(model_columns(val)),
+        data_collator=partial(collate, pad_id=tok.pad_token_id), callbacks=callbacks,
+    )
 
 
 def prepare(cfg: SftConfig, data_dir: Path, tok) -> tuple[list[dict], list[dict], dict]:
     train = load_split(data_dir / "train_sft.jsonl", tok)
     val = load_split(data_dir / "val_sft.jsonl", tok)
-    lengths = token_lengths(train, tok)
-    report = length_report(lengths, cfg.max_seq_len)
+    report = length_report(train, cfg.max_seq_len)
     log.info("train token lengths: %s", report)
-    train = drop_too_long(train, lengths, cfg.max_seq_len)
-    val = drop_too_long(val, token_lengths(val, tok), cfg.max_seq_len)
+    train = drop_too_long(train, cfg.max_seq_len)
+    val = drop_too_long(val, cfg.max_seq_len)
+    if not val:
+        raise ValueError("val split is empty; raise val_frac in configs/default.yaml "
+                         "and rerun `echolm format`")
     return train, val, report
-
-
-def git_sha() -> str | None:
-    try:
-        res = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
-    except FileNotFoundError:
-        log.warning("git not found, run_info.json will have no commit sha")
-        return None
-    if res.returncode != 0:
-        log.warning("not inside a git checkout, run_info.json will have no commit sha")
-        return None
-    return res.stdout.strip()
 
 
 def run_info(cfg, data_dir: Path, report: dict, trainer, result, peak_gb: float) -> dict:
@@ -93,16 +105,35 @@ def run_info(cfg, data_dir: Path, report: dict, trainer, result, peak_gb: float)
                  "val_hash": file_hash(data_dir / "val_sft.jsonl"), **report},
         "best_eval_loss": trainer.state.best_metric,
         "best_checkpoint": trainer.state.best_model_checkpoint,
+        "steps": trainer.state.global_step,
         "train_runtime_s": round(result.metrics["train_runtime"]),
         "peak_vram_gb": round(peak_gb, 2),
     }
 
 
-def train_sft(cfg: SftConfig, data_dir: Path, out_root: Path) -> Path:
-    run_name = f"sft-r{cfg.lora_r}-{time.strftime('%Y%m%d-%H%M')}"
-    out_dir = out_root / run_name
+def run_dir(cfg: SftConfig, out_root: Path, resume: Path | None, max_steps: int) -> Path:
+    if resume:
+        return resume
+    tag = "smoke" if max_steps > 0 else f"r{cfg.lora_r}"
+    return out_root / f"sft-{tag}-{time.strftime('%Y%m%d-%H%M')}"
+
+
+def train_sft(cfg: SftConfig, data_dir: Path, out_root: Path, max_steps: int = -1,
+              resume: Path | None = None) -> Path:
+    out_dir = run_dir(cfg, out_root, resume, max_steps)
+    handler = log_to_file(out_dir / "train.log")
+    try:
+        with keep_awake():
+            fit(cfg, data_dir, out_dir, max_steps, resume is not None)
+    finally:
+        logging.getLogger().removeHandler(handler)
+        handler.close()
+    return out_dir
+
+
+def fit(cfg: SftConfig, data_dir: Path, out_dir: Path, max_steps: int, resume: bool) -> None:
     if cfg.report_to == "wandb":
-        os.environ.setdefault("WANDB_PROJECT", cfg.wandb_project)
+        setup_wandb(cfg.wandb_project)
     model, tok, fast = load_model(cfg)
     import torch
 
@@ -115,13 +146,12 @@ def train_sft(cfg: SftConfig, data_dir: Path, out_root: Path) -> Path:
     samples = SampleCallback(tok, pick_samples(val, cfg.n_samples, cfg.seed), cfg.sample_max_new_tokens,
                              cfg.report_to == "wandb", fast.for_inference, fast.for_training)
     vram = VramCallback()
-    trainer = build_trainer(model, tok, sft_args(cfg, out_dir, run_name, precision), train, val,
-                            [samples, vram])
-    log.info("baseline eval before training: %s", trainer.evaluate())
-    result = trainer.train()
+    args = train_args(cfg, out_dir, len(train), precision, max_steps)
+    trainer = build_trainer(model, tok, args, train, val, [samples, vram])
+    result = trainer.train(resume_from_checkpoint=resume or None)
     trainer.save_model(str(out_dir / "adapter"))
     tok.save_pretrained(str(out_dir / "adapter"))
     info = run_info(cfg, data_dir, report, trainer, result, vram.peak_gb)
     (out_dir / "run_info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-    log.info("best eval loss %s, adapter saved to %s", info["best_eval_loss"], out_dir / "adapter")
-    return out_dir
+    log.info("best eval loss %s at %s", info["best_eval_loss"], info["best_checkpoint"])
+    log.info("adapter saved to %s", out_dir / "adapter")

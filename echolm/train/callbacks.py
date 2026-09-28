@@ -23,8 +23,8 @@ def last_turn(prompt: str) -> str:
 @torch.no_grad()
 def generate(model, tok, prompt: str, max_new_tokens: int) -> str:
     enc = tok(prompt, return_tensors="pt", add_special_tokens=False).to(model.device)
-    out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False,
-                         pad_token_id=tok.pad_token_id or tok.eos_token_id)
+    pad = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
+    out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=pad)
     return tok.decode(out[0][enc["input_ids"].shape[1]:], skip_special_tokens=True).strip()
 
 
@@ -37,13 +37,26 @@ class SampleCallback(TrainerCallback):
         self.use_wandb = use_wandb
         self.to_inference = to_inference
         self.to_training = to_training
+        self.enabled = bool(rows)
+
+    def sample(self, model) -> list[str]:
+        self.to_inference(model)
+        try:
+            return [generate(model, self.tok, r["prompt"], self.max_new_tokens) for r in self.rows]
+        finally:
+            self.to_training(model)
 
     def on_evaluate(self, args, state, control, model=None, **kwargs):
-        if model is None or not state.is_world_process_zero:
+        if not self.enabled or model is None or not state.is_world_process_zero:
             return
-        self.to_inference(model)
-        outs = [generate(model, self.tok, r["prompt"], self.max_new_tokens) for r in self.rows]
-        self.to_training(model)
+        try:
+            outs = self.sample(model)
+        except Exception:
+            # samples are a readout, not part of training: one failure must not end an overnight run
+            log.exception("sample generation failed at step %d, disabling samples for this run",
+                          state.global_step)
+            self.enabled = False
+            return
         table = [[state.global_step, last_turn(r["prompt"]), r["completion"].split("<|im_end|>")[0], out]
                  for r, out in zip(self.rows, outs, strict=True)]
         for _, them, real, fake in table:
@@ -51,7 +64,8 @@ class SampleCallback(TrainerCallback):
         if self.use_wandb:
             import wandb
 
-            wandb.log({"samples": wandb.Table(columns=["step", "them", "real", "model"], data=table)})
+            if wandb.run is not None:
+                wandb.log({"samples": wandb.Table(columns=["step", "them", "real", "model"], data=table)})
 
 
 class VramCallback(TrainerCallback):

@@ -82,15 +82,34 @@ def train() -> None:
     pass
 
 
+SFT_CONFIG = click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path),
+                          default=Path("configs/sft.yaml"), show_default=True)
+DATA = click.option("--data", type=click.Path(exists=True, file_okay=False, path_type=Path),
+                    default=Path("data/processed"))
+
+
+@train.command("check", help="Check GPU, packages, data and disk before a long run.")
+@DATA
+@SFT_CONFIG
+def train_check_cmd(data: Path, config_path: Path) -> None:
+    from echolm.train.check import run_checks
+    from echolm.train.config import load_sft_config
+
+    if not run_checks(data, load_sft_config(config_path).report_to):
+        raise click.ClickException("preflight failed, fix the FAIL lines above")
+
+
 @train.command("sft", help="Supervised fine-tuning with LoRA on the formatted windows.")
-@click.option("--data", type=click.Path(exists=True, file_okay=False, path_type=Path),
-              default=Path("data/processed"))
+@DATA
 @click.option("--out", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/sft"))
-@click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path),
-              default=Path("configs/sft.yaml"), show_default=True)
-def train_sft_cmd(data: Path, out: Path, config_path: Path) -> None:
+@SFT_CONFIG
+@click.option("--max-steps", type=int, default=-1,
+              help="stop after this many steps (a quick smoke test of the whole loop)")
+@click.option("--resume", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
+              help="run folder to continue from its last checkpoint")
+def train_sft_cmd(data: Path, out: Path, config_path: Path, max_steps: int, resume: Path | None) -> None:
     from echolm.train.config import load_sft_config
     from echolm.train.sft import train_sft
 
-    out_dir = train_sft(load_sft_config(config_path), data, out)
+    out_dir = train_sft(load_sft_config(config_path), data, out, max_steps, resume)
     log.info("run saved to %s", out_dir)

@@ -2,12 +2,15 @@ import json
 
 import pytest
 
+from echolm.train.data import IGNORE
 from echolm.train.data import drop_too_long
 from echolm.train.data import file_hash
 from echolm.train.data import length_report
 from echolm.train.data import load_split
+from echolm.train.data import model_columns
+from echolm.train.data import pad_batch
 from echolm.train.data import render
-from echolm.train.data import token_lengths
+from echolm.train.data import tokenize
 
 ROW = {
     "id": "w1",
@@ -32,26 +35,48 @@ def test_render_rejects_mismatched_template(tok):
         render(ROW, Odd())
 
 
+def test_tokenize_masks_prompt_and_keeps_reply(tok):
+    out = tokenize({"prompt": "a b c", "completion": "d e"}, tok)
+    assert out["input_ids"] == ["a", "b", "c", "d", "e"]
+    assert out["labels"] == [IGNORE, IGNORE, IGNORE, "d", "e"]
+    assert out["attention_mask"] == [1] * 5
+
+
 def test_load_split(tmp_path, tok):
     p = tmp_path / "train_sft.jsonl"
     p.write_text(json.dumps(ROW) + "\n", encoding="utf-8")
-    assert load_split(p, tok)[0]["completion"].startswith("kuch nahi")
+    row = load_split(p, tok)[0]
+    assert row["completion"].startswith("kuch nahi")
+    assert row["labels"][-1] == "bas<|im_end|>"
+    assert IGNORE in row["labels"]
 
 
 def test_drop_too_long_keeps_order():
-    rows = [{"id": i} for i in range(4)]
-    assert drop_too_long(rows, [5, 50, 7, 51], 10) == [{"id": 0}, {"id": 2}]
+    rows = [{"input_ids": [0] * n} for n in (5, 50, 7, 51)]
+    assert [len(r["input_ids"]) for r in drop_too_long(rows, 10)] == [5, 7]
 
 
 def test_length_report():
-    rep = length_report([3, 1, 2, 40], 10)
+    rep = length_report([{"input_ids": [0] * n} for n in (3, 1, 2, 40)], 10)
     assert rep["tokens_max"] == 40
     assert rep["over_max_seq_len"] == 1
     assert rep["tokens_median"] == 2.5
 
 
-def test_token_lengths(tok):
-    assert token_lengths([{"prompt": "a b", "completion": " c"}], tok) == [3]
+def test_model_columns_drops_text_fields():
+    row = {"id": "x", "prompt": "p", "completion": "c",
+           "input_ids": [1], "attention_mask": [1], "labels": [1]}
+    assert model_columns([row]) == [{"input_ids": [1], "attention_mask": [1], "labels": [1]}]
+
+
+def test_pad_batch_pads_to_multiple_of_eight():
+    batch = [{"input_ids": [5, 6, 7], "attention_mask": [1, 1, 1], "labels": [IGNORE, 6, 7]},
+             {"input_ids": [5], "attention_mask": [1], "labels": [5]}]
+    out = pad_batch(batch, pad_id=0)
+    assert [len(x) for x in out["input_ids"]] == [8, 8]
+    assert out["input_ids"][1] == [5] + [0] * 7
+    assert out["attention_mask"][1] == [1] + [0] * 7
+    assert out["labels"][0] == [IGNORE, 6, 7] + [IGNORE] * 5
 
 
 def test_file_hash_changes_with_content(tmp_path):
