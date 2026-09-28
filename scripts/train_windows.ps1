@@ -32,7 +32,7 @@ $py = (Resolve-Path ".venv\Scripts\python.exe").Path
 if (-not $SkipInstall) {
     Step "upgrade pip" { & $py -m pip install --upgrade pip }
     Step "install CUDA torch" {
-        & $py -m pip install "torch>=2.10,<2.13" torchvision --index-url https://download.pytorch.org/whl/cu128
+        & $py -m pip install "torch>=2.8,<2.13" torchvision --index-url https://download.pytorch.org/whl/cu128
     }
     Step "install echolm with training extras" { & $py -m pip install -e ".[dev,train]" }
     $cuda = & $py -c "import torch; print(torch.cuda.is_available())"
