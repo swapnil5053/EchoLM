@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 # masking only; no case folding or language filtering, Hinglish passes through untouched
 URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
-PHONE = re.compile(r"(?<![\w])\+?\d[\d\s-]{8,}\d(?![\w])")
+PHONE = re.compile(r"(?<![\w])\+?\d[\d -]{8,}\d(?![\w])")
 OTP = re.compile(r"\b\d{4,8}\b(?=.{0,20}\b(?:otp|code|pin)\b)", re.IGNORECASE)
 
 
@@ -29,11 +29,13 @@ def mask_pii(text: str, blocked: list[str]) -> str:
 
 
 def dedupe(msgs: list[Msg]) -> list[Msg]:
+    # only messages with a platform id can be proven duplicates; WhatsApp has minute timestamps,
+    # so two identical "haha"s in the same minute are real messages and must both stay
     seen = set()
     out = []
     for m in msgs:
-        key = (m.chat_id, m.ts, m.sender, m.kind, m.text)
-        if key in seen:
+        key = (m.chat_id, m.msg_id, m.kind)
+        if m.msg_id is not None and key in seen:
             continue
         seen.add(key)
         out.append(m)
