@@ -14,6 +14,8 @@ max_turn_chars: 600
 # replies longer than this are usually pasted text, not your texting style
 max_target_chars: 600
 min_target_chars: 1
+# replies that share a link are link titles and <URL> placeholders, not your writing
+drop_link_targets: true
 
 # windows where you opened the conversation (no prior message from them)
 include_openers: true

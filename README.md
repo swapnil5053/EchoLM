@@ -23,7 +23,7 @@ This writes to `data/processed/`:
 | `test.jsonl` | held-out prompts plus `reference`, used only by evaluation |
 | `stats.json` | counts per split and chat, openers, quotes, reply lengths |
 
-The synthetic chats are two fictional Hinglish 1:1 conversations (Kabir with Rohan on WhatsApp, with Meera on Telegram) and produce ~56 windows. `examples/synthetic/processed/` has the expected output. `echolm synth` regenerates the raw exports.
+The synthetic chats are two fictional Hinglish 1:1 conversations (Kabir with Rohan on WhatsApp, with Meera on Telegram) and produce ~55 windows. `examples/synthetic/processed/` has the expected output. `echolm synth` regenerates the raw exports.
 
 ## Your own data
 

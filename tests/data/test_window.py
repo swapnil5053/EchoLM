@@ -75,6 +75,13 @@ def test_skip_reasons_are_counted_separately(mk, caplog):
     assert "'target_too_long': 1" in caplog.text
 
 
+def test_link_replies_are_skipped_unless_disabled(mk):
+    msgs = [mk(0, False, "kya bhej"), mk(1, True, "Songspot guess the song <URL>"), mk(2, False, "?"),
+            mk(3, True, "haan")]
+    assert [w.target for w in build_windows(msgs, DataConfig())] == ["haan"]
+    assert len(build_windows(msgs, DataConfig(drop_link_targets=False))) == 2
+
+
 def test_no_windows_raises(mk):
     with pytest.raises(ValueError, match="no training windows"):
         build_windows([mk(0, False, "hi")], DataConfig())

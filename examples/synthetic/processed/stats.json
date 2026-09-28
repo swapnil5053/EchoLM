@@ -1,16 +1,16 @@
 {
-  "windows": 56,
+  "windows": 55,
   "splits": {
     "train": 46,
     "val": 5,
-    "test": 5
+    "test": 4
   },
   "per_chat": {
-    "tg:4242": 24,
+    "tg:4242": 23,
     "wa:whatsapp_rohan": 32
   },
   "openers": 1,
   "with_quote": 1,
-  "target_chars_median": 26.0,
-  "context_turns_mean": 2.48
+  "target_chars_median": 26,
+  "context_turns_mean": 2.47
 }

@@ -76,6 +76,8 @@ def make_window(
         return None, "target_too_long"
     if len(target) < cfg.min_target_chars:
         return None, "target_too_short"
+    if cfg.drop_link_targets and "<URL>" in target:
+        return None, "link_target"
     context = build_context(turns[:i], cfg.max_context_turns, cfg.max_context_chars,
                             cfg.max_turn_chars)
     if not context and not cfg.include_openers:

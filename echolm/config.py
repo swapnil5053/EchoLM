@@ -14,6 +14,7 @@ class DataConfig:
     max_turn_chars: int = 600
     max_target_chars: int = 600
     min_target_chars: int = 1
+    drop_link_targets: bool = True
     include_openers: bool = True
     val_frac: float = 0.05
     test_frac: float = 0.10
