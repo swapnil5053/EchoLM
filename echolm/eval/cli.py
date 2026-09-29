@@ -46,3 +46,21 @@ def eval_report_cmd(out: Path, readme: Path | None) -> None:
     except ValueError as e:
         raise click.ClickException(str(e)) from e
     click.echo(path.read_text(encoding="utf-8"))
+
+
+@eval_group.command("plot", help="Draw the SFT val-loss and GRPO val-reward curves as SVG files.")
+@click.option("--outputs", type=click.Path(exists=True, file_okay=False, path_type=Path),
+              default=Path("outputs"), show_default=True, help="folder holding sft/ and grpo/ runs")
+@click.option("--out", type=click.Path(file_okay=False, path_type=Path), default=Path("docs/figures"),
+              show_default=True)
+def eval_plot_cmd(outputs: Path, out: Path) -> None:
+    from echolm.eval.plots import write_plots
+    from echolm.train.select import newest_run
+
+    try:
+        sft = newest_run(outputs / "sft")
+        grpo = newest_run(outputs / "grpo", "grpo-run-*") if (outputs / "grpo").exists() else None
+        paths = write_plots(sft, grpo, out)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo("\n".join(str(p) for p in paths))
