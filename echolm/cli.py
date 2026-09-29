@@ -106,14 +106,16 @@ def train_check_cmd(data: Path, config_path: Path) -> None:
 
 @train.command("select", help="Print the SFT checkpoint to build on (earliest within tolerance of the best).")
 @click.option("--run", "run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
-              help="SFT run folder (default: newest in outputs/sft)")
+              help="SFT run folder (default: newest in --root)")
+@click.option("--root", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/sft"),
+              show_default=True)
 @click.option("--tol", type=float, default=0.03, show_default=True)
-def train_select_cmd(run_dir: Path | None, tol: float) -> None:
+def train_select_cmd(run_dir: Path | None, root: Path, tol: float) -> None:
     from echolm.train.select import newest_run
     from echolm.train.select import select_checkpoint
 
     try:
-        path = select_checkpoint(run_dir or newest_run(Path("outputs/sft")), tol)
+        path = select_checkpoint(run_dir or newest_run(root), tol)
     except ValueError as e:
         raise click.ClickException(str(e)) from e
     click.echo(str(path))
@@ -201,16 +203,18 @@ def eval_report_cmd(out: Path, readme: Path | None) -> None:
 
 @cli.command(help="Write a model card (README.md) into a GRPO run's adapter folder.")
 @click.option("--run", "run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
-              help="GRPO run folder (default: newest in outputs/grpo)")
+              help="GRPO run folder (default: newest in --root)")
+@click.option("--root", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/grpo"),
+              show_default=True)
 @click.option("--eval", "eval_root", type=click.Path(file_okay=False, path_type=Path),
               default=Path("outputs/eval"))
 @DATA
-def card(run_dir: Path | None, eval_root: Path, data: Path) -> None:
+def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path) -> None:
     from echolm.card import write_card
     from echolm.train.select import newest_run
 
     try:
-        run_dir = run_dir or newest_run(Path("outputs/grpo"), "grpo-run-*")
+        run_dir = run_dir or newest_run(root, "grpo-run-*")
     except ValueError as e:
         raise click.ClickException(str(e)) from e
     click.echo(str(write_card(run_dir, eval_root, data)))
