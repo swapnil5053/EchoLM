@@ -4,6 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Dataset ubuntu
 # Stages run in order: setup, data, sft, grpo, eval, card. Pick a subset with -Stages, e.g.
 #   -Stages grpo,eval,card
+# -Stages seeds trains GRPO again with several seeds (-Seeds 1,2,3) and adds them to the report.
 # Add -SkipInstall once packages are in place, -RetrainSft to train SFT again even if a run exists.
 
 param(
@@ -12,6 +13,7 @@ param(
     [string]$IrcUser = "",
     [string]$Channel = "#ubuntu",
     [int]$Since = 2016,
+    [int[]]$Seeds = @(1, 2, 3),
     [string[]]$Stages = @("setup", "data", "sft", "grpo", "eval", "card"),
     [switch]$SkipInstall,
     [switch]$RetrainSft
@@ -134,7 +136,7 @@ if ($Stages -contains "sft") {
 }
 
 $sftCkpt = (& $py -m echolm.cli train select --root "$out/sft" | Select-Object -Last 1)
-if ($LASTEXITCODE -ne 0 -and ($Stages -contains "grpo" -or $Stages -contains "eval")) {
+if ($LASTEXITCODE -ne 0 -and ($Stages -contains "grpo" -or $Stages -contains "eval" -or $Stages -contains "seeds")) {
     Write-Host "no SFT run to build on; run the sft stage first" -ForegroundColor Red
     exit 1
 }
@@ -179,6 +181,32 @@ if ($Stages -contains "eval") {
         Step "re-score $row" { & $py -m echolm.cli eval run --model $row --name $row --score-only @ev }
     }
     # only the public dataset's numbers go into README.md; your own chat's report stays in outputs\
+    $readme = @()
+    if ($Dataset -eq "ubuntu") { $readme = @("--readme", "README.md") }
+    Step "report" { & $py -m echolm.cli eval report --out $evalDir @readme }
+    # figures of the public run go into the repo; your own chat's stay next to its outputs
+    $figs = "$out/figures"
+    if ($Dataset -eq "ubuntu") { $figs = "docs/figures" }
+    Write-Host "`n=== training curves (not blocking) ===" -ForegroundColor Cyan
+    & $py -m echolm.cli eval plot --outputs $out --out $figs
+    if ($LASTEXITCODE -ne 0) { Write-Host "could not draw the curves, continuing" -ForegroundColor Yellow }
+}
+
+if ($Stages -contains "seeds") {
+    # one GRPO run per seed from the same SFT checkpoint; finished seeds are skipped on a rerun
+    $ev = @("--data", $data, "--out", $evalDir)
+    foreach ($seed in $Seeds) {
+        $root = "$out/grpo-seeds/s$seed"
+        if (-not (Newest $root "grpo-run-*" "adapter")) {
+            Step "GRPO seed $seed" {
+                & $py -m echolm.cli train grpo --data $data --out $root --init $sftCkpt --seed $seed
+            }
+        }
+        if (-not (Test-Path "$evalDir/grpo-s$seed/metrics.json")) {
+            $adapter = Join-Path (Newest $root "grpo-run-*" "adapter").FullName "adapter"
+            Step "evaluate GRPO seed $seed" { & $py -m echolm.cli eval run --model $adapter --name "grpo-s$seed" @ev }
+        }
+    }
     $readme = @()
     if ($Dataset -eq "ubuntu") { $readme = @("--readme", "README.md") }
     Step "report" { & $py -m echolm.cli eval report --out $evalDir @readme }

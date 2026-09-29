@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import statistics
 from pathlib import Path
 
 from echolm.eval.human import summary
@@ -22,6 +23,7 @@ COLUMNS = [
 ]
 STAGES = ("base", "sft", "grpo")
 START, END = "<!-- results:start -->", "<!-- results:end -->"
+SEEDED = re.compile(r"^(.+)-s\d+$")
 
 
 def fmt(value) -> str:
@@ -33,6 +35,8 @@ def fmt(value) -> str:
 
 
 def cell(metrics: dict, key: str) -> str:
+    if f"{key}_seed_sd" in metrics:
+        return f"{metrics[key]:.3f} ±{metrics[f'{key}_seed_sd']:.3f}"
     text = fmt(metrics.get(key))
     if key == "median_words" and metrics.get(key) is not None:
         text = f"{metrics[key]:g}"
@@ -60,7 +64,28 @@ def order(names: list[str]) -> list[str]:
     return sorted(names, key=key)
 
 
+def seed_means(runs: dict[str, dict]) -> dict[str, dict]:
+    """One extra row per model trained with several seeds (names like grpo-s1, grpo-s2): mean ± sd."""
+    groups = {}
+    for name in runs:
+        m = SEEDED.match(name)
+        if m:
+            groups.setdefault(m.group(1), []).append(runs[name])
+    out = {}
+    for prefix, rows in groups.items():
+        if len(rows) < 2:
+            continue
+        row = {"reference": rows[0]["reference"]}
+        for key, _, _ in COLUMNS:
+            values = [r[key] for r in rows if isinstance(r.get(key), (int, float))]
+            if len(values) == len(rows):
+                row[key], row[f"{key}_seed_sd"] = statistics.fmean(values), statistics.stdev(values)
+        out[f"{prefix} (mean of {len(rows)} seeds)"] = row
+    return out
+
+
 def table(runs: dict[str, dict]) -> str:
+    runs = {**runs, **seed_means(runs)}
     names = order(list(runs))
     reference = runs[names[0]]["reference"]
     lines = ["| model | " + " | ".join(c[1] for c in COLUMNS) + " |", "|" + "---|" * (len(COLUMNS) + 1)]

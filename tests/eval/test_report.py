@@ -61,3 +61,13 @@ def test_report_adds_the_human_judge_line(tmp_path):
     (tmp_path / "guesses.jsonl").write_text(rows, encoding="utf-8")
     text = build_report(tmp_path)
     assert "sft: real reply spotted in 1 of 1 rounds (100%); grpo: real reply spotted in 0 of 1" in text
+
+
+def test_seed_runs_get_a_mean_row(tmp_path):
+    for name, auc in (("sft", 0.8), ("grpo-s1", 0.7), ("grpo-s2", 0.8), ("grpo-s3", 0.9)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "metrics.json").write_text(json.dumps({**METRICS, "detect_auc": auc}),
+                                                      encoding="utf-8")
+    text = build_report(tmp_path)
+    assert "| grpo (mean of 3 seeds) | 0.800 ±0.100 | 0.200 ±0.000 |" in text
+    assert text.index("| sft |") < text.index("| grpo (mean") < text.index("| grpo-s1 |")
