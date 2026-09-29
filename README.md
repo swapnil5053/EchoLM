@@ -1,6 +1,6 @@
 # EchoLM
 
-**Fine-tune a 1.5B language model to text like you, from your own WhatsApp and Telegram chats, on an 8 GB laptop GPU.**
+**Fine-tune a 1.5B language model to text like you, from your own WhatsApp and Telegram chats, on an 8 GB laptop GPU.** Benchmarked in public on one real person's replies rebuilt from the Ubuntu IRC logs, so the numbers below come from data anyone can download.
 
 EchoLM turns a chat export into a time-split dataset, fine-tunes Qwen2.5-1.5B-Instruct with LoRA (SFT), then keeps training it with a from-scratch GRPO loop whose rewards target the failure SFT actually showed: collapsing onto a few stock replies. Every stage is measured on replies written *after* anything the model trained on, including a classifier that tries to tell the model's replies from yours.
 
@@ -8,7 +8,7 @@ Built for code-switched chat: romanized Hindi and English are treated as one voc
 
 ```mermaid
 flowchart LR
-    A[WhatsApp .txt<br/>Telegram .json] --> B[parse + mask PII]
+    A[WhatsApp .txt<br/>Telegram .json<br/>Ubuntu IRC threads] --> B[parse + mask PII]
     B --> C[sessions, turns,<br/>context windows]
     C --> D[time split<br/>train / val / test]
     D --> E[SFT<br/>LoRA r16, reply-only loss]
@@ -20,22 +20,26 @@ flowchart LR
 
 ## Results
 
+Public benchmark: one prolific #ubuntu helper, their 1:1 exchanges rebuilt from the public-domain [Ubuntu IRC logs](https://huggingface.co/datasets/common-pile/ubuntu_irc) (see [Public benchmark](#public-benchmark-ubuntu-irc)). Test replies are the latest 10% of sessions, written after everything the model trained on.
+
 <!-- results:start -->
-First measured run: one 1:1 chat, 813 training replies, 50 held-out test replies written later than all training data, 3 sampled replies per prompt. (`scripts/run.ps1` regenerates this table with the full metric set, GRPO included.)
+Not run yet: `scripts\run.ps1 -Dataset ubuntu` fills in this table (base vs SFT vs GRPO, every metric below).
+<!-- results:end -->
+
+### On a private chat
+
+The first run was on one private 1:1 Hinglish chat (813 training replies, 50 later test replies; only aggregate numbers are shown, the chat and model stay local). It shaped the design:
 
 | model | style gap ↓ | reply ppl ↓ | chatbot ↓ | 6-gram copy ↓ | distinct ↑ | median words |
 |---|---|---|---|---|---|---|
 | base (Qwen2.5-1.5B-Instruct) | 1.133 | 323.9 | 0.633 | 0.000 | 0.787 | 18.3 |
 | SFT, lowest val loss (step 100) | 0.345 | 79.4 | 0.000 | 0.188 | 0.287 | 3.3 |
 | SFT, selected (step 80) | **0.313** | 80.0 | 0.000 | **0.018** | **0.373** | 6.7 |
-| your real replies | 0.000 | – | 0.000 | 0.000 | 0.960 | 3 |
-<!-- results:end -->
+| real replies | 0.000 | – | 0.000 | 0.000 | 0.960 | 3 |
 
-What the numbers say:
-
-- **SFT learns the style.** The model stops sounding like an assistant (63% → 0% assistant phrases), matches reply length, and your real replies become 4x more predictable to it.
+- **SFT learns the style.** The model stops sounding like an assistant (63% → 0% assistant phrases), matches reply length, and the real replies become 4x more predictable to it.
 - **The lowest val loss is not the best model.** From step 80 to 100 val loss improved by 2.6% while copying of training text went up 10x. EchoLM picks the earliest checkpoint within 3% of the best loss instead (`echolm train select`).
-- **SFT collapses.** Only about a third of its replies are unique, against 96% of yours, and your training data is 95% unique, so it isn't repetition in the data. GRPO's rewards are built around that.
+- **SFT collapses.** Only about a third of its replies are unique, against 96% of the real ones, and the training data is 95% unique, so it isn't repetition in the data. GRPO's rewards are built around that.
 
 ## How it works
 
@@ -72,11 +76,30 @@ The rewards (`echolm/rl/rewards.py`), each computed per sampled reply:
 
 ### Evaluation
 
-Every model answers the same 50 later-in-time test prompts, 3 samples each at temperature 0.8 (greedy decoding hides collapse). Metrics:
+Every model answers the same later-in-time test prompts, 3 samples each at temperature 0.8 (greedy decoding hides collapse). Metrics:
 
 - **detect AUC**: a character n-gram classifier, cross-validated, tries to tell your real test replies from the model's. 0.5 = indistinguishable. No reward optimizes it. The "your real replies" row pits your later replies against your earlier ones, the realistic floor since your own style drifts.
 - **chrF** with a 95% bootstrap interval over prompts, **style gap**, **perplexity** of your real replies, **distinct** replies, **6-gram copy**, **assistant phrases**.
 - Columns marked † in the report are also GRPO rewards (on the training split), and are read with that in mind.
+
+### Public benchmark: Ubuntu IRC
+
+IRC is one big room, not a set of 1:1 chats, so `echolm/irc` rebuilds them. For a chosen nick, each line is attached to the one person it talks to, or dropped:
+
+- **addressed**: the line starts with `nick:` or `nick,` for someone seen in the channel that day;
+- **answer**: the first unprefixed line after being addressed, within a minute;
+- **continuation**: an unprefixed line right after the speaker's own attached line, within a minute.
+
+Bots and `!commands` are removed. Every partner becomes a separate 1:1 chat, the nick is renamed "Alex" and partners `user0001`…, and the result is written as a Telegram export, so the rest of the pipeline runs unchanged. Because the export is hundreds of short chats, the split is global by time (`configs/irc.yaml`) instead of per chat.
+
+The rules were checked against human reply annotations ([irc-disentanglement](https://github.com/jkkummerfeld/irc-disentanglement), Kummerfeld et al., ACL 2019; the one-minute window was chosen on the dev split, numbers are from the test split):
+
+| rules | precision | recall of reply links |
+|---|---|---|
+| addressed only | 0.964 | 0.449 |
+| addressed + answer + continuation | 0.933 | 0.646 |
+
+Precision = share of attached lines whose annotated parent is the chosen partner, or the speaker's own line in the same exchange. Two of the ten test logs are left out: their labels are shifted by 6 and 3 lines against the raw text in the public repository (unshifted, even `nick:` lines score 0.32 and 0.39; shifted, at least 0.81 and 0.88). With them included, precision is 0.807.
 
 ## Run it
 
@@ -101,12 +124,23 @@ powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Me "your name as it ap
 .venv\Scripts\echolm demo
 ```
 
-`run.ps1` installs a CUDA build of torch, Unsloth and the rest into `.venv`, rebuilds the dataset, trains SFT (reusing a finished run unless `-RetrainSft`), selects the checkpoint, runs GRPO, evaluates base / SFT / GRPO, writes `outputs/eval/report.md`, updates the table above and writes a model card into the GRPO adapter. Each training stage runs a short smoke test first and falls back to a slower path if the fast one fails on Windows. `-Stages grpo,eval,card` runs a subset.
+`run.ps1` installs a CUDA build of torch, Unsloth and the rest into `.venv`, rebuilds the dataset, trains SFT (reusing a finished run unless `-RetrainSft`), selects the checkpoint, runs GRPO, evaluates base / SFT / GRPO, writes `outputs/eval/report.md` and writes a model card into the GRPO adapter. Each training stage runs a short smoke test first and falls back to a slower path if the fast one fails on Windows. `-Stages grpo,eval,card` runs a subset.
+
+### Public benchmark (Windows, NVIDIA GPU)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Dataset ubuntu
+.venv\Scripts\echolm demo --outputs outputs/ubuntu --data data/ubuntu/processed
+```
+
+This streams the 6 GB dataset once and keeps the `#ubuntu` logs since 2016 (`-Channel`, `-Since` to change), lists the most active nicks, picks the top one (`-IrcUser NICK` for another), keeps their most recent threads up to 2000 of their lines, checks the thread rebuilding against the annotations, and then runs the same stages as above under `data/ubuntu` and `outputs/ubuntu`. Only this run writes into the README table; a run on your own chats keeps its report in `outputs/eval`.
 
 The demo opens a local page (bound to 127.0.0.1, never shared) where you play the other person, switch between the base, SFT and GRPO models, and compare all three on one message.
 
 | command | what it does |
 |---|---|
+| `echolm irc fetch / users / export` | download a channel's IRC logs, rank nicks, write one nick's 1:1 threads as an export |
+| `echolm irc validate --data DIR` | score thread rebuilding against human reply labels |
 | `echolm parse EXPORT --me NAME` | parse one export into cleaned messages |
 | `echolm format` | windows, time split, SFT / GRPO / test files, `stats.json` |
 | `echolm train check` | GPU, packages, data, disk and W&B preflight |
@@ -125,13 +159,14 @@ Every run writes a `run_info.json` (config, data hashes, git commit, val history
 ```
 echolm/
   parse/     WhatsApp and Telegram parsers
+  irc/       Ubuntu IRC: download, thread rebuilding, validation, export
   data/      cleaning, windows, time split, export, synthetic data
   train/     SFT (Unsloth + Trainer), checkpoint selection, preflight, Windows runtime helpers
   rl/        GRPO: rewards, chrF, rollouts, loss, training loop, W&B tracker
   eval/      sampling, detection AUC, style, copying, report
   demo/      Gradio app with adapter switching
   card.py    model card
-configs/     default.yaml (data), sft.yaml, grpo.yaml, eval.yaml
+configs/     default.yaml and irc.yaml (data), sft.yaml, grpo.yaml, eval.yaml
 scripts/     run.ps1
 docs/adr/    design decisions and the evidence behind them
 tests/       one test file per module; the SFT, GRPO, eval and demo paths run end to end on CPU with a tiny model
@@ -139,7 +174,7 @@ tests/       one test file per module; the SFT, GRPO, eval and demo paths run en
 
 ## Privacy
 
-Real exports, processed data, adapters, generations and W&B sample tables stay out of git (`.gitignore`), and nothing is uploaded unless you log in to W&B, which then receives metrics only. A model trained on a real chat has read the other person's messages too: keep it private. The repository ships only synthetic data.
+Real exports, processed data, adapters, generations and W&B sample tables stay out of git (`.gitignore`), and nothing is uploaded unless you log in to W&B, which then receives metrics only. A model trained on a real chat has read the other person's messages too: keep it private. The repository ships only synthetic data, and the published results come from public-domain IRC logs.
 
 ## Development
 
