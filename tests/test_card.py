@@ -34,3 +34,10 @@ def test_card_without_eval_or_stats(tmp_path):
     path = write_card(grpo_run(tmp_path), tmp_path / "missing", tmp_path)
     text = path.read_text(encoding="utf-8")
     assert path.name == "README.md" and "## Evaluation" not in text
+
+
+def test_irc_card_says_where_the_data_came_from(tmp_path):
+    text = build_card(grpo_run(tmp_path), tmp_path / "missing", tmp_path, irc=True)
+    assert "datasets: [common-pile/ubuntu_irc]" in text
+    assert "Do not use it for support" in text
+    assert "do not upload them" not in text

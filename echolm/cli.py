@@ -209,7 +209,8 @@ def eval_report_cmd(out: Path, readme: Path | None) -> None:
 @click.option("--eval", "eval_root", type=click.Path(file_okay=False, path_type=Path),
               default=Path("outputs/eval"))
 @DATA
-def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path) -> None:
+@click.option("--irc", is_flag=True, help="the adapter was trained on the Ubuntu IRC benchmark")
+def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path, irc: bool) -> None:
     from echolm.card import write_card
     from echolm.train.select import newest_run
 
@@ -217,7 +218,7 @@ def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path) -> None:
         run_dir = run_dir or newest_run(root, "grpo-run-*")
     except ValueError as e:
         raise click.ClickException(str(e)) from e
-    click.echo(str(write_card(run_dir, eval_root, data)))
+    click.echo(str(write_card(run_dir, eval_root, data, irc)))
 
 
 @cli.command(help="Chat with the base, SFT and GRPO models side by side in the browser (local only).")

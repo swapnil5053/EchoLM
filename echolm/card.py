@@ -13,6 +13,14 @@ pipeline_tag: text-generation
 tags: [lora, sft, grpo, style-transfer, hinglish, unsloth]
 ---
 """
+IRC_FRONT = """---
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+library_name: peft
+pipeline_tag: text-generation
+datasets: [common-pile/ubuntu_irc]
+tags: [lora, sft, grpo, style-transfer, irc, unsloth]
+---
+"""
 
 
 def read_json(path: Path) -> dict:
@@ -50,22 +58,38 @@ LIMITS = """## Intended use and limits
 - 1.5B parameters: short, stylistically faithful replies, weak multi-turn reasoning.
 """
 
+IRC_LIMITS = """## Intended use and limits
 
-def build_card(grpo_run: Path, eval_root: Path, data_dir: Path) -> str:
+- A style benchmark model: it imitates one prolific #ubuntu helper, renamed "Alex", from public-domain
+  Ubuntu IRC logs. Their 1:1 exchanges were rebuilt with addressing rules that agree with human reply
+  labels about 93% of the time, so some training replies answer the wrong message.
+- It writes confident Linux advice that is often wrong or outdated. Do not use it for support.
+- 1.5B parameters: short, stylistically faithful replies, weak multi-turn reasoning.
+"""
+
+
+def header(irc: bool) -> list[str]:
+    if irc:
+        return [IRC_FRONT, "# EchoLM style adapter: Ubuntu IRC benchmark", "",
+                "LoRA adapter for Qwen2.5-1.5B-Instruct trained with SFT and then GRPO to reply the way one "
+                "Ubuntu IRC helper writes, from their 1:1 exchanges rebuilt out of the channel logs.", ""]
+    return [FRONT, "# EchoLM personal style adapter", "",
+            "LoRA adapter for Qwen2.5-1.5B-Instruct trained with SFT and then GRPO to reply the way one "
+            "person texts (romanized Hindi-English code-switching included).", ""]
+
+
+def build_card(grpo_run: Path, eval_root: Path, data_dir: Path, irc: bool = False) -> str:
     info = read_json(grpo_run / "run_info.json")
     stats = read_json(data_dir / "stats.json")
-    parts = [FRONT, "# EchoLM personal style adapter", "",
-             "LoRA adapter for Qwen2.5-1.5B-Instruct trained with SFT and then GRPO to reply the way one "
-             "person texts (romanized Hindi-English code-switching included).", ""]
-    parts += training_section(info, stats)
+    parts = header(irc) + training_section(info, stats)
     if (eval_root).exists() and any(eval_root.glob("*/metrics.json")):
         parts += ["## Evaluation", "", build_report(eval_root)]
-    parts.append(LIMITS)
+    parts.append(IRC_LIMITS if irc else LIMITS)
     return "\n".join(parts)
 
 
-def write_card(grpo_run: Path, eval_root: Path, data_dir: Path) -> Path:
+def write_card(grpo_run: Path, eval_root: Path, data_dir: Path, irc: bool = False) -> Path:
     path = grpo_run / "adapter" / "README.md"
-    path.write_text(build_card(grpo_run, eval_root, data_dir), encoding="utf-8")
+    path.write_text(build_card(grpo_run, eval_root, data_dir, irc), encoding="utf-8")
     log.info("model card written to %s", path)
     return path

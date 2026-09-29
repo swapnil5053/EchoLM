@@ -181,7 +181,9 @@ if ($Stages -contains "eval") {
 
 if ($Stages -contains "card") {
     if (Newest "$out/grpo" "grpo-run-*" "adapter") {
-        Step "model card" { & $py -m echolm.cli card --root "$out/grpo" --eval $evalDir --data $data }
+        $kind = @()
+        if ($Dataset -eq "ubuntu") { $kind = @("--irc") }
+        Step "model card" { & $py -m echolm.cli card --root "$out/grpo" --eval $evalDir --data $data @kind }
     }
 }
 
