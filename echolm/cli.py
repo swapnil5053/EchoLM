@@ -64,7 +64,8 @@ def format_cmd(parsed: Path, out: Path, name: str | None, config_path: Path | No
     msgs = load_parsed(parsed)
     name = name or Counter(m.sender for m in msgs if m.is_me).most_common(1)[0][0]
     wins = build_windows(msgs, cfg)
-    wins = split_windows(wins, cfg.val_frac, cfg.test_frac, cfg.max_chat_share, cfg.seed)
+    wins = split_windows(wins, cfg.val_frac, cfg.test_frac, cfg.max_chat_share, cfg.seed,
+                         cfg.split_by)
     info = export_all(wins, out, cfg.system_prompt.replace("{name}", name))
     log.info("done: %s", info)
 

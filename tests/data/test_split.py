@@ -44,3 +44,13 @@ def test_cap_chat_share():
 def test_cap_ignores_held_out_and_single_chat():
     wins = [win(i, "big") for i in range(10)] + [win(i, "big", split="test") for i in range(10, 12)]
     assert cap_chat_share(wins, 0.3, 0) == wins
+
+
+def test_time_split_holds_out_latest_sessions_across_chats():
+    wins = [Window(f"c{i}", f"chat{i}", 0, f"2024-01-{i + 1:02d}T10:00", [], "t") for i in range(20)]
+    out = split_windows(wins, 0.1, 0.1, None, 0, by="time")
+    labels = [w.split for w in sorted(out, key=lambda w: w.ts)]
+    assert labels[-2:] == ["test", "test"]
+    assert labels[-4:-2] == ["val", "val"]
+    assert set(labels[:-4]) == {"train"}
+    assert {w.split for w in split_windows(wins, 0.1, 0.1, None, 0)} == {"train"}

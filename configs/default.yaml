@@ -20,7 +20,9 @@ drop_link_targets: true
 # windows where you opened the conversation (no prior message from them)
 include_openers: true
 
-# time-based split, per chat, by whole sessions
+# time-based split by whole sessions: "chat" holds out the latest sessions of each chat,
+# "time" the latest sessions overall (for exports made of many short chats, like IRC)
+split_by: chat
 val_frac: 0.05
 test_frac: 0.10
 

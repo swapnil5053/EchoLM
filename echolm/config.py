@@ -19,6 +19,7 @@ class DataConfig:
     val_frac: float = 0.05
     test_frac: float = 0.10
     max_chat_share: float | None = None
+    split_by: str = "chat"
     seed: int = 13
     system_prompt: str = "You are {name}. Reply to the chat exactly the way {name} texts."
     blocked_words: list[str] = field(default_factory=list)
@@ -38,4 +39,6 @@ def load_config(path: Path | None) -> DataConfig:
     cfg = load_dataclass(path, DataConfig)
     if not 0 <= cfg.val_frac + cfg.test_frac < 1:
         raise ValueError(f"val_frac + test_frac must be in [0, 1), got {cfg.val_frac + cfg.test_frac}")
+    if cfg.split_by not in ("chat", "time"):
+        raise ValueError(f"split_by must be 'chat' or 'time', got '{cfg.split_by}'")
     return cfg

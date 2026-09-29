@@ -33,6 +33,17 @@ def assign_splits(wins: list[Window], val_frac: float, test_frac: float) -> list
     return [replace(w, split=labels[w.chat_id][w.session]) for w in wins]
 
 
+def assign_global(wins: list[Window], val_frac: float, test_frac: float) -> list[Window]:
+    """Hold out the latest sessions across all chats, for exports made of many short chats."""
+    start = {}
+    for w in wins:
+        key = (w.chat_id, w.session)
+        start[key] = min(start.get(key, w.ts), w.ts)
+    labels = session_splits([(ts, key) for key, ts in start.items()], val_frac, test_frac)
+    by_key = {key: labels[(ts, key)] for key, ts in start.items()}
+    return [replace(w, split=by_key[(w.chat_id, w.session)]) for w in wins]
+
+
 def cap_chat_share(wins: list[Window], share: float | None, seed: int) -> list[Window]:
     train = [w for w in wins if w.split == "train"]
     counts = Counter(w.chat_id for w in train)
@@ -51,8 +62,9 @@ def cap_chat_share(wins: list[Window], share: float | None, seed: int) -> list[W
 
 
 def split_windows(wins: list[Window], val_frac: float, test_frac: float,
-                  share: float | None, seed: int) -> list[Window]:
-    out = cap_chat_share(assign_splits(wins, val_frac, test_frac), share, seed)
+                  share: float | None, seed: int, by: str = "chat") -> list[Window]:
+    assign = assign_global if by == "time" else assign_splits
+    out = cap_chat_share(assign(wins, val_frac, test_frac), share, seed)
     counts = Counter(w.split for w in out)
     log.info("split: %s", dict(counts))
     return out
