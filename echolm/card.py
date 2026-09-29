@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from echolm.eval.report import build_report
+from echolm.train.runtime import repo_url
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,23 @@ IRC_LIMITS = """## Intended use and limits
 - 1.5B parameters: short, stylistically faithful replies, weak multi-turn reasoning.
 """
 
+USAGE = """## Usage
+
+```python
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+base = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct", device_map="auto")
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct")
+model = PeftModel.from_pretrained(base, "REPO")
+msgs = [{"role": "system", "content": "You are Alex. Reply in the chat exactly the way Alex writes."},
+        {"role": "user", "content": "my wifi stops working after suspend, any idea?"}]
+ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(model.device)
+print(tok.decode(model.generate(ids, max_new_tokens=64, do_sample=True, temperature=0.8)[0][ids.shape[1]:],
+                 skip_special_tokens=True))
+```
+"""
+
 
 def header(irc: bool) -> list[str]:
     if irc:
@@ -85,6 +103,9 @@ def build_card(grpo_run: Path, eval_root: Path, data_dir: Path, irc: bool = Fals
     if (eval_root).exists() and any(eval_root.glob("*/metrics.json")):
         parts += ["## Evaluation", "", build_report(eval_root)]
     parts.append(IRC_LIMITS if irc else LIMITS)
+    if irc:
+        url = repo_url()
+        parts += [USAGE, f"Trained with [EchoLM]({url})." if url else "Trained with EchoLM.", ""]
     return "\n".join(parts)
 
 

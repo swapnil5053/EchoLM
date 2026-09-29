@@ -1,5 +1,8 @@
 import logging
 import os
+from types import SimpleNamespace
+
+import pytest
 
 from echolm.train import runtime
 
@@ -44,3 +47,13 @@ def test_log_to_file_writes_utf8(tmp_path):
 def test_git_sha_is_short_or_none():
     sha = runtime.git_sha()
     assert sha is None or 4 <= len(sha) <= 12
+
+
+@pytest.mark.parametrize("remote, url", [
+    ("git@github.com:someone/EchoLM.git\n", "https://github.com/someone/EchoLM"),
+    ("https://github.com/someone/EchoLM.git\n", "https://github.com/someone/EchoLM"),
+    ("", None),
+])
+def test_repo_url(monkeypatch, remote, url):
+    monkeypatch.setattr(runtime.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=remote))
+    assert runtime.repo_url() == url

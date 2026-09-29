@@ -72,3 +72,15 @@ def git_sha() -> str | None:
         log.warning("not inside a git checkout, run_info.json will have no commit sha")
         return None
     return res.stdout.strip()
+
+
+def repo_url() -> str | None:
+    """The origin remote as an https URL, e.g. for linking the code from a model card."""
+    try:
+        res = subprocess.run(["git", "config", "--get", "remote.origin.url"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return None
+    url = res.stdout.strip().removesuffix(".git")
+    if url.startswith("git@github.com:"):
+        url = "https://github.com/" + url.removeprefix("git@github.com:")
+    return url if url.startswith("https://") else None

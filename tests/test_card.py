@@ -41,3 +41,11 @@ def test_irc_card_says_where_the_data_came_from(tmp_path):
     assert "datasets: [common-pile/ubuntu_irc]" in text
     assert "Do not use it for support" in text
     assert "do not upload them" not in text
+
+
+def test_irc_card_has_usage_with_a_repo_placeholder(tmp_path, monkeypatch):
+    monkeypatch.setattr("echolm.card.repo_url", lambda: "https://github.com/someone/EchoLM")
+    text = build_card(grpo_run(tmp_path), tmp_path / "missing", tmp_path, irc=True)
+    assert 'PeftModel.from_pretrained(base, "REPO")' in text
+    assert "[EchoLM](https://github.com/someone/EchoLM)" in text
+    assert "## Usage" not in build_card(grpo_run(tmp_path / "p"), tmp_path / "missing", tmp_path)

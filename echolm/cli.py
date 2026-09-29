@@ -181,6 +181,23 @@ def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path, irc: boo
     click.echo(str(write_card(run_dir, eval_root, data, irc)))
 
 
+@cli.command(help="Upload the Ubuntu IRC benchmark adapter and its model card to the Hugging Face Hub.")
+@click.option("--root", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs/ubuntu/grpo"),
+              show_default=True, help="folder with grpo-run-* runs; the newest one is uploaded")
+@click.option("--repo", default=None, help="repo name or user/name [default: echolm-ubuntu-irc-qwen2.5-1.5b]")
+@click.option("--private", is_flag=True, help="create the Hub repo as private")
+def push(root: Path, repo: str | None, private: bool) -> None:
+    from echolm.hub import DEFAULT_NAME
+    from echolm.hub import push as upload
+    from echolm.train.select import newest_run
+
+    try:
+        url = upload(newest_run(root, "grpo-run-*") / "adapter", repo or DEFAULT_NAME, private)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(url)
+
+
 @cli.command(help="Chat with the base, SFT and GRPO models side by side in the browser (local only).")
 @click.option("--outputs", type=click.Path(file_okay=False, path_type=Path), default=Path("outputs"))
 @DATA
