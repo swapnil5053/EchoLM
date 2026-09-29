@@ -49,3 +49,10 @@ def test_unknown_nick_is_a_clear_error(logs):
 def test_write_export_picks_the_top_nick(logs, tmp_path):
     stats = write_export(logs, tmp_path / "out.json", None, "Alex", 1.0, 4)
     assert stats == {"partners": 2, "messages": 16, "my_messages": 10}
+
+
+def test_empty_logs_is_a_clear_error(tmp_path):
+    p = tmp_path / "logs.jsonl"
+    p.write_text('{"day": "2024-01-01", "channel": "#ubuntu", "text": "=== join"}\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="irc fetch"):
+        assigned_days(p, 1.0)

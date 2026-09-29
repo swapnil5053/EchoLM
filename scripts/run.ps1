@@ -92,7 +92,12 @@ if ($Stages -contains "data" -and $Dataset -eq "ubuntu") {
     Step "build dataset" { & $py -m echolm.cli format --parsed $parsed --out $data --config $dataCfg }
     # how well the thread rebuilding matches human reply labels; informative, never blocks the run
     $gold = "data/irc/irc-disentanglement"
-    if (-not (Test-Path $gold)) { git clone --depth 1 -q https://github.com/jkkummerfeld/irc-disentanglement $gold }
+    if (-not (Test-Path "$gold/data/test")) {
+        # only the 3 MB test split, not the whole repository
+        git clone --depth 1 -q --filter=blob:none --no-checkout https://github.com/jkkummerfeld/irc-disentanglement $gold
+        git -C $gold sparse-checkout set --no-cone "/data/test/"
+        git -C $gold checkout -q
+    }
     if (Test-Path "$gold/data/test") {
         Write-Host "`n=== thread rebuilding vs. human labels (irc-disentanglement test split) ===" -ForegroundColor Cyan
         & $py -m echolm.cli irc validate --data "$gold/data/test" --skip 2008-07-14_18 --skip 2010-08-17_18

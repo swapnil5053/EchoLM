@@ -6,7 +6,6 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-from echolm.data.io import read_jsonl
 from echolm.irc.log import parse_day
 from echolm.irc.threads import Assigned
 from echolm.irc.threads import assign
@@ -16,8 +15,18 @@ log = logging.getLogger(__name__)
 
 
 def assigned_days(logs: Path, gap_min: float) -> list[list[Assigned]]:
-    days = [parse_day(row["text"], date.fromisoformat(row["day"])) for row in read_jsonl(logs)]
-    return [assign(lines, gap_min) for lines in sorted(filter(None, days), key=lambda d: d[0].ts)]
+    """One day at a time, so only the attached lines of years of logs are held in memory."""
+    days = []
+    with logs.open(encoding="utf-8") as f:
+        for raw in f:
+            if raw.strip():
+                row = json.loads(raw)
+                days.append(assign(parse_day(row["text"], date.fromisoformat(row["day"])), gap_min))
+    days = sorted(filter(None, days), key=lambda d: d[0].line.ts)
+    if not days:
+        raise ValueError(f"no chat lines in {logs}; delete it and run `echolm irc fetch` again")
+    log.info("%d days, %d attached lines", len(days), sum(map(len, days)))
+    return days
 
 
 def rank_users(days: list[list[Assigned]], min_msgs: int = 4) -> list[dict]:

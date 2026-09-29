@@ -41,7 +41,11 @@ def fetch(channel: str, since: int, max_docs: int | None, out: Path) -> None:
 @MIN_MSGS
 @click.option("--top", type=int, default=15, show_default=True)
 def users(logs: Path, gap_min: float, min_msgs: int, top: int) -> None:
-    for row in rank_users(assigned_days(logs, gap_min), min_msgs)[:top]:
+    try:
+        days = assigned_days(logs, gap_min)
+    except ValueError as e:
+        raise click.ClickException(str(e)) from e
+    for row in rank_users(days, min_msgs)[:top]:
         click.echo(f"{row['nick']:<24} {row['replies']:>7} replies  {row['partners']:>6} partners")
 
 
