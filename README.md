@@ -23,8 +23,33 @@ flowchart LR
 Public benchmark: one prolific #ubuntu helper, their 1:1 exchanges rebuilt from the public-domain [Ubuntu IRC logs](https://huggingface.co/datasets/common-pile/ubuntu_irc) (see [Public benchmark](#public-benchmark-ubuntu-irc)). Test replies are the latest 10% of sessions, written after everything the model trained on.
 
 <!-- results:start -->
-Not run yet: `scripts\run.ps1 -Dataset ubuntu` fills in this table (base vs SFT vs GRPO, every metric below).
+80 held-out test replies (later in time than all training data), 3 sampled replies each at temperature 0.8. † = also a GRPO reward on the training split.
+
+| model | detect AUC ↓ | chrF ↑ † | style gap ↓ † | reply ppl ↓ | distinct ↑ | 6-gram copy ↓ † | chatbot ↓ † | median words |
+|---|---|---|---|---|---|---|---|---|
+| base | 0.965 ±0.010 | 0.171 (0.157–0.184) | 1.199 | 51.910 | 1.000 | 0.009 | 0.292 | 46.3333 |
+| sft | 0.838 ±0.022 | 0.144 (0.134–0.154) | 0.237 | 19.710 | 0.992 | 0.000 | 0.009 | 19 |
+| grpo | 0.829 ±0.032 | 0.141 (0.131–0.151) | 0.196 | 19.870 | 0.992 | 0.000 | 0.017 | 15 |
+| your real replies | 0.588 | – | 0.000 | – | 0.988 | 0.000 | 0.000 | 11 |
+
+- **detect AUC ↓**: cross-validated classifier telling your real replies from the model's; 0.5 = cannot tell them apart. Not optimized by any reward
+- **chrF ↑ †**: character n-gram F-score against what you actually replied to the same message (95% bootstrap interval over prompts)
+- **style gap ↓ †**: mean standardized difference from your real replies on 9 style features
+- **reply ppl ↓**: perplexity of your real test replies under the model
+- **distinct ↑**: share of unique replies; low means it falls back on stock replies
+- **6-gram copy ↓ †**: share of 6+ word replies sharing a 6-word run with a training reply
+- **chatbot ↓ †**: share of replies with assistant phrases ("I'm sorry, but" ...)
+- **median words**: reply length
+
 <!-- results:end -->
+
+What the numbers say (one run; GRPO 200 steps, 2 h 40 min on an RTX 4060 Laptop GPU, 4 h 12 min end to end):
+
+- **SFT does most of the work.** The classifier's ability to tell the model from the real person drops from 0.965 to 0.838 AUC, perplexity of the real replies falls 2.6x (51.9 → 19.7), assistant phrasing goes from 29% to 1%, and replies shrink from 46 to 19 words.
+- **GRPO moves what it was rewarded for, and nothing else measurably.** Style gap improves a further 17% (0.237 → 0.196) and replies get closer to the real length (19 → 15 words, real 11), but both are rewards. On the metrics no reward touches, GRPO is level with SFT: detection AUC 0.829 ±0.032 vs 0.838 ±0.022, perplexity 19.9 vs 19.7. Its val reward dipped to 0.675 at step 100 and recovered to 0.777 by step 200, against 0.749 at step 0, a gap within sampling noise.
+- **chrF favours long replies.** The untuned base model has the best chrF (0.171) because chrF weighs recall twice as much as precision, and 46-word answers cover more of the reference's character n-grams. That is why chrF is paired with a length reward in GRPO and never read alone.
+- **No collapse on this data.** Unlike the private chat below, 99% of SFT replies are distinct: a support helper rarely repeats a stock line, so the duplicate and copy penalties never fired.
+- **The gap left is large.** The model's replies are still told apart from the real ones at 0.83 AUC, against 0.59 for the person's own later vs earlier replies. The test set is 80 replies, so differences under a few hundredths are not meaningful.
 
 ### On a private chat
 
