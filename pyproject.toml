@@ -19,6 +19,7 @@ dev = ["pytest>=8", "ruff>=0.5"]
 train = ["unsloth", "wandb"]
 eval = ["scikit-learn"]
 demo = ["gradio>=5"]
+irc = ["datasets>=2.19"]
 
 [project.scripts]
 echolm = "echolm.cli:cli"

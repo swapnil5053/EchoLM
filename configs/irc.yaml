@@ -1,0 +1,20 @@
+# Data settings for the Ubuntu IRC test set (`echolm irc export`).
+# Hundreds of short 1:1 threads instead of a few long chats, so the split is global by time.
+
+session_gap_min: 60
+max_context_turns: 8
+max_context_chars: 1500
+max_turn_chars: 600
+max_target_chars: 600
+min_target_chars: 1
+drop_link_targets: true
+# an opener here is a line aimed at someone whose question was asked to the whole channel,
+# so the context the model would see is empty
+include_openers: false
+split_by: time
+val_frac: 0.05
+test_frac: 0.10
+max_chat_share: null
+seed: 13
+system_prompt: "You are {name}. Reply in the chat exactly the way {name} writes."
+blocked_words: []

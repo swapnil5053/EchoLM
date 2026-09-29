@@ -27,3 +27,11 @@ def test_split_fractions_validated(tmp_path):
     p.write_text("val_frac: 0.5\ntest_frac: 0.5\n", encoding="utf-8")
     with pytest.raises(ValueError, match="val_frac"):
         load_config(p)
+
+
+def test_irc_yaml_loads_and_split_by_is_checked(tmp_path):
+    assert load_config(Path(__file__).parent.parent / "configs" / "irc.yaml").split_by == "time"
+    p = tmp_path / "c.yaml"
+    p.write_text("split_by: random\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="split_by"):
+        load_config(p)

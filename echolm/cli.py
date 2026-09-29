@@ -13,6 +13,7 @@ from echolm.data.models import Msg
 from echolm.data.split import split_windows
 from echolm.data.synthetic import write_synthetic
 from echolm.data.window import build_windows
+from echolm.irc.cli import irc
 from echolm.parse.load import load_export
 
 log = logging.getLogger("echolm")
@@ -26,6 +27,9 @@ CONFIG = click.option("--config", "config_path", type=click.Path(exists=True, pa
 def cli(verbose: bool) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO,
                         format="%(levelname)s %(name)s: %(message)s")
+
+
+cli.add_command(irc)
 
 
 @cli.command(help="Parse one WhatsApp .txt or Telegram .json export into cleaned messages.")
