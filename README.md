@@ -1,5 +1,7 @@
 # EchoLM
 
+[![tests](https://github.com/swapnil5053/EchoLM/actions/workflows/ci.yml/badge.svg)](https://github.com/swapnil5053/EchoLM/actions/workflows/ci.yml)
+
 **Fine-tune a 1.5B language model to text like you, from your own WhatsApp and Telegram chats, on an 8 GB laptop GPU.** Benchmarked in public on one real person's replies rebuilt from the Ubuntu IRC logs, so the numbers below come from data anyone can download.
 
 EchoLM turns a chat export into a time-split dataset, fine-tunes Qwen2.5-1.5B-Instruct with LoRA (SFT), then keeps training it with a from-scratch GRPO loop whose rewards target the failure SFT actually showed: collapsing onto a few stock replies. Every stage is measured on replies written *after* anything the model trained on, including a classifier that tries to tell the model's replies from yours.
@@ -51,6 +53,13 @@ What the numbers say (one run; GRPO 200 steps, 2 h 40 min on an RTX 4060 Laptop 
 - **No collapse on this data.** Unlike the private chat below, 99% of SFT replies are distinct: a support helper rarely repeats a stock line, so the duplicate and copy penalties never fired.
 - **The gap left is large.** The model's replies are still told apart from the real ones at 0.83 AUC, against 0.59 for the person's own later vs earlier replies. The test set is 80 replies, so differences under a few hundredths are not meaningful.
 
+<p align="center">
+  <img src="docs/figures/sft_val_loss.svg" alt="SFT validation loss by training step, with the selected checkpoint circled" width="49%">
+  <img src="docs/figures/grpo_val_reward.svg" alt="GRPO validation reward by step, against the SFT starting point" width="49%">
+</p>
+
+The GRPO run above used lr 1e-5 and one sampled reply per validation prompt, so its val curve mixes real change with sampling noise. The current config halves the learning rate, doubles the warmup and validates every checkpoint on the same random draws with two samples per prompt; `run.ps1 -Stages seeds` retrains GRPO with three seeds under it and adds a mean ± sd row to the table. Anyone can also judge the models blind: the demo's **Real or model?** tab shows the real reply next to a model's and logs how often you pick right, and the report adds that hit rate (50% = indistinguishable).
+
 ### On a private chat
 
 The first run was on one private 1:1 Hinglish chat (813 training replies, 50 later test replies; only aggregate numbers are shown, the chat and model stay local). It shaped the design:
@@ -85,8 +94,8 @@ Qwen2.5-1.5B-Instruct in 4-bit with Unsloth, LoRA rank 16 on all attention and M
 - advantage `A = (r − mean(group)) / std(group)`; groups where all 4 replies score the same carry no signal and are skipped;
 - PPO-style clipped ratio, active when a batch is reused (`num_iterations > 1`);
 - token-level loss normalization: every generated token weighs the same, whatever the reply length;
-- **no KL term**. With LoRA, the frozen reference is the adapter-free *base* model, so a KL penalty would pull the policy back towards the chatbot SFT just trained away. Small clipped steps (lr 1e-5, grad norm 0.2) and the reward terms keep it near the SFT model instead;
-- validation every 25 steps, including step 0 = the SFT model: if GRPO never beats SFT on val reward, the final adapter *is* the SFT one.
+- **no KL term**. With LoRA, the frozen reference is the adapter-free *base* model, so a KL penalty would pull the policy back towards the chatbot SFT just trained away. Small clipped steps (lr 5e-6 after 20 warmup steps, grad norm 0.2) and the reward terms keep it near the SFT model instead;
+- validation every 25 steps, including step 0 = the SFT model, on the same random draws for every checkpoint (2 samples per prompt): if GRPO never beats SFT on val reward, the final adapter *is* the SFT one.
 
 The rewards (`echolm/rl/rewards.py`), each computed per sampled reply:
 
@@ -160,7 +169,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run.ps1 -Dataset ubuntu
 
 This streams the 6 GB dataset once and keeps the `#ubuntu` logs since 2016 (`-Channel`, `-Since` to change), lists the most active nicks, picks the top one (`-IrcUser NICK` for another), keeps their most recent threads up to 2000 of their lines, checks the thread rebuilding against the annotations, and then runs the same stages as above under `data/ubuntu` and `outputs/ubuntu`. Only this run writes into the README table; a run on your own chats keeps its report in `outputs/eval`.
 
-The demo opens a local page (bound to 127.0.0.1, never shared) where you play the other person, switch between the base, SFT and GRPO models, and compare all three on one message.
+The demo opens a local page (bound to 127.0.0.1, never shared) where you play the other person, switch between the base, SFT and GRPO models, compare all three on one message, or play **Real or model?**: pick the real reply out of a blind pair. `--guess-only` starts just the game from the saved eval samples, without loading a model.
 
 | command | what it does |
 |---|---|
@@ -174,8 +183,10 @@ The demo opens a local page (bound to 127.0.0.1, never shared) where you play th
 | `echolm train grpo [--init ADAPTER] [--backend hf]` | GRPO |
 | `echolm eval run --model base\|ADAPTER --name NAME` | sample and score one model |
 | `echolm eval report [--readme README.md]` | comparison table |
-| `echolm card` | model card for the newest GRPO run |
-| `echolm demo` | local chat UI |
+| `echolm eval plot --outputs DIR` | SFT val-loss and GRPO val-reward curves as SVG |
+| `echolm card [--irc]` | model card for the newest GRPO run |
+| `echolm push` | upload the Ubuntu IRC adapter and card to the Hugging Face Hub (refuses adapters trained on private chats) |
+| `echolm demo [--guess-only]` | local chat UI and the blind real-or-model game |
 
 Every run writes a `run_info.json` (config, data hashes, git commit, val history, peak VRAM, runtime) and a `train.log`. W&B logging falls back to offline mode when you are not logged in, and sample text never goes to W&B unless `wandb_samples: true`.
 
@@ -189,8 +200,9 @@ echolm/
   train/     SFT (Unsloth + Trainer), checkpoint selection, preflight, Windows runtime helpers
   rl/        GRPO: rewards, chrF, rollouts, loss, training loop, W&B tracker
   eval/      sampling, detection AUC, style, copying, report
-  demo/      Gradio app with adapter switching
+  demo/      Gradio app with adapter switching and the real-or-model game
   card.py    model card
+  hub.py     Hugging Face upload, public benchmark adapters only
 configs/     default.yaml and irc.yaml (data), sft.yaml, grpo.yaml, eval.yaml
 scripts/     run.ps1
 docs/adr/    design decisions and the evidence behind them
@@ -199,7 +211,7 @@ tests/       one test file per module; the SFT, GRPO, eval and demo paths run en
 
 ## Privacy
 
-Real exports, processed data, adapters, generations and W&B sample tables stay out of git (`.gitignore`), and nothing is uploaded unless you log in to W&B, which then receives metrics only. A model trained on a real chat has read the other person's messages too: keep it private. The repository ships only synthetic data, and the published results come from public-domain IRC logs.
+Real exports, processed data, adapters, generations and W&B sample tables stay out of git (`.gitignore`), and nothing is uploaded unless you log in to W&B, which then receives metrics only. `echolm push` only accepts an adapter whose model card names the public IRC dataset. A model trained on a real chat has read the other person's messages too: keep it private. The repository ships only synthetic data, and the published results come from public-domain IRC logs.
 
 ## Development
 
@@ -209,6 +221,6 @@ pytest
 ruff check .
 ```
 
-The end-to-end tests (SFT data path, GRPO loop, eval sampling, demo) build a tiny random Qwen2 model on the fly and run on CPU in seconds; they need torch, transformers and peft and are skipped without them.
+The end-to-end tests (SFT data path, GRPO loop, eval sampling, demo) build a tiny random Qwen2 model on the fly and run on CPU in seconds; they need torch, transformers and peft and are skipped without them. GitHub Actions runs lint and the full suite on Windows for every push.
 
 EchoLM was inspired by WeClone; see [ATTRIBUTION.md](ATTRIBUTION.md). Design decisions and the measurements behind them: [docs/adr/0001-architecture.md](docs/adr/0001-architecture.md).

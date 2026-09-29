@@ -54,8 +54,8 @@ Written from scratch in `echolm/rl` rather than through TRL's `GRPOTrainer`, so 
 - 4 samples per prompt, 4 prompts per step; advantages normalized within each group; groups with no reward spread are skipped (logged as `zero_std_groups`).
 - Clipped ratio objective (PPO-style), active when a batch is reused for several updates; on-policy (`num_iterations: 1`) it reduces exactly to REINFORCE with a group baseline, which a unit test checks on the gradient.
 - Token-level normalization across the step, so short and long replies weigh per token, not per reply.
-- **No KL term.** With LoRA, the frozen reference policy is the model with the adapter disabled, i.e. the base chatbot. A KL penalty would pull the policy back towards exactly what SFT removed. Instead: lr 1e-5, gradient norm clipped at 0.2, and reward terms that penalize assistant phrasing.
-- Validation every 25 steps on the val split, including step 0 = the SFT model. The final adapter is the checkpoint with the highest val reward; if GRPO never beats SFT, the SFT weights are what is kept.
+- **No KL term.** With LoRA, the frozen reference policy is the model with the adapter disabled, i.e. the base chatbot. A KL penalty would pull the policy back towards exactly what SFT removed. Instead: a small learning rate (5e-6), gradient norm clipped at 0.2, and reward terms that penalize assistant phrasing.
+- Validation every 25 steps on the val split, including step 0 = the SFT model, on fixed random draws (the same seed for every checkpoint, 2 samples per prompt). The first IRC run validated on fresh single samples: its curve dipped 10% and recovered, and the final gap to step 0 (+0.028) was within the noise between two evals, so checkpoints could not be told apart. It also used lr 1e-5 with 10 warmup steps; now 5e-6 with 20. The final adapter is the checkpoint with the highest val reward; if GRPO never beats SFT, the SFT weights are what is kept.
 - Two model backends: Unsloth (fast kernels) and plain transformers + PEFT. The Windows script falls back to the second if the first fails. No vLLM: it does not run on Windows, so generation uses `model.generate`.
 
 ## 6. Evaluation
