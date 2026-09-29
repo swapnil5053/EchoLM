@@ -149,14 +149,17 @@ def train_sft_cmd(data: Path, out: Path, config_path: Path, max_steps: int, resu
 @click.option("--backend", type=click.Choice(["unsloth", "hf"]), default=None,
               help="override the model backend from the config")
 @click.option("--max-steps", type=int, default=-1, help="stop after this many steps (smoke test)")
+@click.option("--seed", type=int, default=None, help="override the config seed (data order and sampling)")
 def train_grpo_cmd(data: Path, out: Path, config_path: Path, init: Path | None, backend: str | None,
-                   max_steps: int) -> None:
+                   max_steps: int, seed: int | None) -> None:
     from echolm.rl.config import load_grpo_config
     from echolm.rl.train import train_grpo
 
     cfg = load_grpo_config(config_path)
     if backend:
         cfg.backend = backend
+    if seed is not None:
+        cfg.seed = seed
     out_dir = train_grpo(cfg, data, out, max_steps, init)
     log.info("run saved to %s", out_dir)
 

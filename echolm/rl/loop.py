@@ -66,13 +66,21 @@ def train_step(policy: Policy, batch: list[Example], cfg: GrpoConfig, ctx: Rewar
 
 
 def validate(policy: Policy, examples: list[Example], cfg: GrpoConfig, ctx: RewardContext) -> dict:
+    """Val reward on fixed random draws: every checkpoint samples with the same seed, so the
+    comparison between checkpoints is not swamped by sampling noise. Training RNG is left untouched."""
+    import torch
+
     policy.to_inference(policy.model)
     texts, parts = [], []
-    for ex in examples:
-        ids = sample_group(policy, ex.prompt_ids, 1, cfg.max_new_tokens, cfg.val_temperature, 1.0)[0]
-        text = decode(policy, ids)
-        texts.append(text)
-        parts += score_group([text], ex.reference, ex.id, ctx.index, ctx.scales, reward_weights(cfg))
+    devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+    with torch.random.fork_rng(devices=devices):
+        torch.manual_seed(cfg.seed)
+        for ex in examples:
+            outs = sample_group(policy, ex.prompt_ids, cfg.val_samples, cfg.max_new_tokens,
+                                cfg.val_temperature, 1.0)
+            for text in (decode(policy, ids) for ids in outs):
+                texts.append(text)
+                parts += score_group([text], ex.reference, ex.id, ctx.index, ctx.scales, reward_weights(cfg))
     out = {k: statistics.fmean(p[k] for p in parts) for k in PARTS if k != "duplicate"}
     out["reward"] = statistics.fmean(p["total"] for p in parts)
     out["distinct"] = repetition(texts)["distinct"]

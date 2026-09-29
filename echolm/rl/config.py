@@ -19,8 +19,8 @@ class GrpoConfig:
     max_new_tokens: int = 64
     temperature: float = 1.0
     top_p: float = 1.0
-    lr: float = 1e-5
-    warmup_steps: int = 10
+    lr: float = 5e-6
+    warmup_steps: int = 20
     weight_decay: float = 0.0
     max_grad_norm: float = 0.2
     max_steps: int = 200
@@ -29,6 +29,7 @@ class GrpoConfig:
     scale_rewards: str = "group"
     eval_steps: int = 25
     val_temperature: float = 0.8
+    val_samples: int = 2
     seed: int = 13
     report_to: str = "wandb"
     wandb_project: str = "echolm"
@@ -46,6 +47,8 @@ def load_grpo_config(path: Path | None) -> GrpoConfig:
         raise ValueError(f"scale_rewards must be 'group' or 'none', got '{cfg.scale_rewards}'")
     if cfg.num_generations < 2:
         raise ValueError("num_generations must be at least 2: advantages are relative to the group")
+    if cfg.val_samples < 1:
+        raise ValueError(f"val_samples must be at least 1, got {cfg.val_samples}")
     if cfg.report_to not in ("wandb", "none"):
         raise ValueError(f"report_to must be 'wandb' or 'none', got '{cfg.report_to}'")
     return cfg

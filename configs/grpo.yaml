@@ -18,9 +18,11 @@ max_new_tokens: 64
 temperature: 1.0
 top_p: 1.0
 
-# small, clipped updates: the SFT policy is already close, GRPO should adjust it, not rewrite it
-lr: 1.0e-5
-warmup_steps: 10
+# small, clipped updates: the SFT policy is already close, GRPO should adjust it, not rewrite it.
+# The first Ubuntu IRC run used 1e-5 with 10 warmup steps: val reward fell 10% by step 100
+# before recovering, so the step size is halved and the warmup doubled
+lr: 5.0e-6
+warmup_steps: 20
 weight_decay: 0.0
 max_grad_norm: 0.2
 # 200 x 4 = 800 prompts, about one pass over the training windows
@@ -31,10 +33,12 @@ clip_eps: 0.2
 # "group": (r - mean) / std within each prompt's group (GRPO); "none": only mean-centred (Dr. GRPO)
 scale_rewards: group
 
-# every eval samples one reply per val prompt, logs the reward parts, and saves a checkpoint;
+# every eval samples val_samples replies per val prompt with the same random seed each time (so
+# checkpoints are compared on the same draws), logs the reward parts, and saves a checkpoint;
 # the checkpoint with the highest val reward becomes the final adapter
 eval_steps: 25
 val_temperature: 0.8
+val_samples: 2
 
 seed: 13
 report_to: wandb
