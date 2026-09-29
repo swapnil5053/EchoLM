@@ -53,3 +53,11 @@ def test_readme_without_markers(tmp_path):
 def test_build_report_without_runs(tmp_path):
     with pytest.raises(ValueError, match="echolm eval run"):
         build_report(tmp_path)
+
+
+def test_report_adds_the_human_judge_line(tmp_path):
+    runs(tmp_path, names=("base", "sft", "grpo"))
+    rows = '{"id": "a", "model": "grpo", "correct": false}\n{"id": "b", "model": "sft", "correct": true}\n'
+    (tmp_path / "guesses.jsonl").write_text(rows, encoding="utf-8")
+    text = build_report(tmp_path)
+    assert "sft: real reply spotted in 1 of 1 rounds (100%); grpo: real reply spotted in 0 of 1" in text

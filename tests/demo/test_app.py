@@ -40,3 +40,36 @@ def test_compare_answers_with_every_model():
 def test_build_app():
     app = build_app(FakeBank(), "sys")
     assert app is not None
+
+
+class FakeGame:
+    models = ["sft"]
+
+    def __init__(self):
+        from echolm.demo.guess import Round
+
+        self.rnd = Round("a", "sft", [{"role": "user", "content": "q"}], ["fake", "real"], 1)
+
+    def new_round(self, model):
+        return self.rnd
+
+    def answer(self, rnd, picked):
+        return picked == rnd.real
+
+
+def test_guess_round_and_answer():
+    from echolm.demo.app import guess_answer
+    from echolm.demo.app import guess_round
+
+    game = FakeGame()
+    context, a, b, rnd, result = guess_round(game)("sft")
+    assert (context, a, b, result) == ("**them:** q", "fake", "real", "")
+    text, tally, score, cleared = guess_answer(game, 1)(rnd, [0, 0])
+    assert text.startswith("**Right.**") and tally == [1, 1] and score.startswith("1 / 1")
+    assert cleared is None
+    assert guess_answer(game, 0)(None, [0, 0])[0].startswith("press")
+
+
+def test_build_app_guess_only():
+    assert build_app(None, "sys", FakeGame()) is not None
+    assert build_app(FakeBank(), "sys", FakeGame()) is not None

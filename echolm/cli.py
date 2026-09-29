@@ -189,19 +189,27 @@ def card(run_dir: Path | None, root: Path, eval_root: Path, data: Path, irc: boo
 @click.option("--grpo", type=click.Path(exists=True, file_okay=False, path_type=Path), default=None,
               help="GRPO adapter (default: the newest GRPO run)")
 @click.option("--port", type=int, default=7860, show_default=True)
-def demo(outputs: Path, data: Path, sft: Path | None, grpo: Path | None, port: int) -> None:
+@click.option("--guess-only", is_flag=True,
+              help="only the 'Real or model?' game, from saved eval samples; no GPU or model loading")
+def demo(outputs: Path, data: Path, sft: Path | None, grpo: Path | None, port: int, guess_only: bool) -> None:
     from echolm.demo.app import build_app
+    from echolm.demo.guess import GuessGame
     from echolm.demo.models import ModelBank
     from echolm.demo.models import find_adapters
     from echolm.demo.models import system_prompt
     from echolm.eval.config import EvalConfig
 
-    adapters = find_adapters(outputs)
-    adapters.update({k: v for k, v in (("sft", sft), ("grpo", grpo)) if v})
-    bank = ModelBank(EvalConfig().base_model, adapters)
+    game = GuessGame(data, outputs / "eval")
+    if guess_only and not game.models:
+        raise click.ClickException(f"no sft or grpo generations under {outputs / 'eval'}; run the eval stage")
+    bank = None
+    if not guess_only:
+        adapters = find_adapters(outputs)
+        adapters.update({k: v for k, v in (("sft", sft), ("grpo", grpo)) if v})
+        bank = ModelBank(EvalConfig().base_model, adapters)
     # bound to this machine only: the replies are generated from private chats
-    build_app(bank, system_prompt(data)).launch(server_name="127.0.0.1", server_port=port, share=False,
-                                                inbrowser=True)
+    build_app(bank, system_prompt(data), game).launch(server_name="127.0.0.1", server_port=port,
+                                                      share=False, inbrowser=True)
 
 
 if __name__ == "__main__":

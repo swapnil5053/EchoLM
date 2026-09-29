@@ -3,6 +3,8 @@ import logging
 import re
 from pathlib import Path
 
+from echolm.eval.human import summary
+
 log = logging.getLogger(__name__)
 
 # (key, header, description); † marks metrics that are also GRPO rewards on the training data
@@ -76,8 +78,18 @@ def build_report(root: Path) -> str:
     return "\n".join([
         f"{n} held-out test replies (later in time than all training data), {len(seeds)} sampled "
         "replies each at temperature 0.8. † = also a GRPO reward on the training split.", "",
-        table(runs), "", *notes, "",
+        table(runs), "", *human_lines(root), *notes, "",
     ])
+
+
+def human_lines(root: Path) -> list[str]:
+    scores = summary(root)
+    if not scores:
+        return []
+    parts = [f"{m}: real reply spotted in {s['correct']} of {s['rounds']} rounds ({s['accuracy']:.0%})"
+             for m, s in sorted(scores.items(), key=lambda kv: order(list(scores)).index(kv[0]))]
+    return ["Human judge, blind A/B in the demo's \"Real or model?\" tab (50% = cannot tell): "
+            + "; ".join(parts) + ".", ""]
 
 
 def update_readme(readme: Path, body: str) -> None:
