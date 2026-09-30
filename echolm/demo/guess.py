@@ -6,6 +6,7 @@ from pathlib import Path
 
 from echolm.data.io import read_jsonl
 from echolm.eval.human import FILE
+from echolm.eval.human import summary
 
 log = logging.getLogger(__name__)
 
@@ -60,3 +61,8 @@ class GuessGame:
         with self.log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"id": rnd.id, "model": rnd.model, "correct": correct}) + "\n")
         return correct
+
+    def totals(self, model: str) -> list[int]:
+        """Hits and rounds for a model, across every session saved so far."""
+        s = summary(self.log_path.parent).get(model, {})
+        return [s.get("correct", 0), s.get("rounds", 0)]

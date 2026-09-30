@@ -12,7 +12,7 @@ FILE = "guesses.jsonl"
 def summary(eval_dir: Path) -> dict[str, dict]:
     """Share of rounds where a person spotted the real reply, per model (0.5 = could not tell)."""
     path = eval_dir / FILE
-    if not path.exists():
+    if not path.exists() or not path.read_text(encoding="utf-8").strip():
         return {}
     out = {}
     for row in read_jsonl(path):

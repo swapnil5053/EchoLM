@@ -12,3 +12,8 @@ def test_summary_per_model(tmp_path):
 
 def test_no_guesses(tmp_path):
     assert summary(tmp_path) == {}
+
+
+def test_empty_file_counts_as_no_guesses(tmp_path):
+    (tmp_path / FILE).write_text("", encoding="utf-8")
+    assert summary(tmp_path) == {}

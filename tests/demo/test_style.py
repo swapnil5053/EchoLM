@@ -25,4 +25,5 @@ def test_transcript_escapes_and_labels_turns():
 def test_scoreboard():
     assert "no answers yet" in scoreboard([0, 0])
     board = scoreboard([27, 64], "Not this time", good=False)
-    assert "27<small>/64" in board and "42% spotted" in board and "verdict bad" in board
+    assert "27<small> / 64" in board and "width:42%" in board
+    assert "42% spotted" in board and "verdict bad" in board

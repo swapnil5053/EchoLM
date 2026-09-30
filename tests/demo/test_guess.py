@@ -53,3 +53,11 @@ def test_rounds_place_the_real_reply_at_random_and_log_answers(dirs):
 def test_unknown_model_is_a_clear_error(dirs):
     with pytest.raises(ValueError, match="echolm eval run"):
         GuessGame(*dirs).new_round("grpo")
+
+
+def test_totals_add_up_saved_rounds(dirs):
+    game = GuessGame(*dirs, seed=1)
+    assert game.totals("sft") == [0, 0]
+    rnd = game.new_round("sft")
+    game.answer(rnd, rnd.real)
+    assert GuessGame(*dirs).totals("sft") == [1, 1]

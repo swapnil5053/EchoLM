@@ -49,12 +49,17 @@ class FakeGame:
         from echolm.demo.guess import Round
 
         self.rnd = Round("a", "sft", [{"role": "user", "content": "q"}], ["fake", "real"], 1)
+        self.log = []
 
     def new_round(self, model):
         return self.rnd
 
     def answer(self, rnd, picked):
+        self.log.append(picked == rnd.real)
         return picked == rnd.real
+
+    def totals(self, model):
+        return [sum(self.log), len(self.log)]
 
 
 def test_guess_round_and_answer():
@@ -62,15 +67,16 @@ def test_guess_round_and_answer():
     from echolm.demo.app import guess_round
 
     game = FakeGame()
-    context, a, b, rnd, score = guess_round(game, "Alex")("sft", [0, 0])
+    context, a, b, rnd, score = guess_round(game, "Alex")("sft")
     assert "Which reply did Alex send?" in context and "q</p>" in context
     assert (a["value"], b["value"]) == ("fake", "real")
-    assert a["interactive"] and "0<small>/0" in score
-    a, b, tally, score, cleared = guess_answer(game, 1)(rnd, [0, 0])
-    assert tally == [1, 1] and cleared is None
+    assert a["interactive"] and "no answers yet" in score
+    a, b, score, cleared = guess_answer(game, 1)(rnd)
+    assert cleared is None and "1<small> / 1" in score
     assert a["elem_classes"] == ["slip", "model"] and b["elem_classes"] == ["slip", "real"]
-    assert not b["interactive"] and "Right: B was the real reply." in score
-    assert "Next pair" in guess_answer(game, 0)(None, [1, 1])[3]
+    assert not b["interactive"] and "Right: B was the real reply" in score
+    assert guess_answer(game, 0)(None)[3] is None
+    assert game.log == [True]
 
 
 def test_build_app_guess_only():

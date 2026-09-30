@@ -4,6 +4,7 @@ import logging
 from echolm.demo.models import bubbles
 from echolm.demo.models import to_messages
 from echolm.demo.style import CSS
+from echolm.demo.style import KEYS
 from echolm.demo.style import MASTHEAD
 from echolm.demo.style import persona
 from echolm.demo.style import scoreboard
@@ -48,52 +49,51 @@ def slip(gr, text: str, mark: str | None = None):
 
 
 def guess_round(game, name: str):
-    def fn(model: str, tally: list[int]):
+    def fn(model: str):
         import gradio as gr
 
         rnd = game.new_round(model)
         return (transcript(rnd.context, name), slip(gr, rnd.options[0]), slip(gr, rnd.options[1]), rnd,
-                scoreboard(tally))
+                scoreboard(game.totals(model)))
 
     return fn
 
 
 def guess_answer(game, picked: int):
-    def fn(rnd, tally: list[int]):
+    def fn(rnd):
         import gradio as gr
 
         if rnd is None:
-            return gr.update(), gr.update(), tally, scoreboard(tally, "Press Next pair to continue."), None
+            return gr.update(), gr.update(), gr.update(), None
         correct = game.answer(rnd, picked)
-        tally = [tally[0] + correct, tally[1] + 1]
         marks = ["real" if i == rnd.real else "model" for i in range(2)]
-        verdict = f"{'Right' if correct else 'Not this time'}: {'AB'[rnd.real]} was the real reply."
+        verdict = f"{'Right' if correct else 'Not this time'}: {'AB'[rnd.real]} was the real reply"
         # the round is cleared so a second click cannot log the same pair twice
         slips = [slip(gr, text, mark) for text, mark in zip(rnd.options, marks, strict=True)]
-        return *slips, tally, scoreboard(tally, verdict, correct), None
+        return *slips, scoreboard(game.totals(rnd.model), verdict, correct), None
 
     return fn
 
 
 def guess_tab(gr, game, name: str) -> None:
-    with gr.Row():
+    with gr.Row(equal_height=True):
         model = gr.Dropdown(choices=[(LABELS.get(m, m), m) for m in game.models], value=game.models[-1],
-                            label="model", scale=3)
-        with gr.Column(scale=1, min_width=160):
-            new = gr.Button("Next pair", variant="primary")
-    context = gr.HTML("<div class='empty'>Press <b>Next pair</b> to see a conversation.</div>")
+                            show_label=False, container=False, scale=4)
+        new = gr.Button("Next pair", elem_id="next-pair", scale=1, min_width=150)
+    start = "<div class='empty'>Press <kbd>N</kbd> or <b>Next pair</b> to see a conversation.</div>"
+    context = gr.HTML(start)
     with gr.Row(equal_height=True):
         a = gr.Button("", elem_id="slip-a", elem_classes=["slip"], interactive=False)
         b = gr.Button("", elem_id="slip-b", elem_classes=["slip"], interactive=False)
-    rnd, tally = gr.State(None), gr.State([0, 0])
-    score = gr.HTML(scoreboard([0, 0]))
-    gr.Markdown("One reply is what the person actually sent, the other is the model's, sampled for the "
-                "held-out test set. Answers are saved, and `echolm eval report` adds the hit rate to the "
-                "results table.")
-    round_fn = guess_round(game, name)
-    new.click(round_fn, [model, tally], [context, a, b, rnd, score], api_name="guess_round")
-    a.click(guess_answer(game, 0), [rnd, tally], [a, b, tally, score, rnd], api_name=False)
-    b.click(guess_answer(game, 1), [rnd, tally], [a, b, tally, score, rnd], api_name=False)
+    score = gr.HTML(scoreboard(game.totals(game.models[-1])))
+    gr.Markdown("One reply is what the person sent, the other is the model's sample for the same message. "
+                "Keys: <kbd>A</kbd> <kbd>B</kbd> to pick, <kbd>N</kbd> for the next pair. Answers are saved "
+                "and `echolm eval report` adds the hit rate to the results.", elem_classes=["hint"])
+    rnd = gr.State(None)
+    new.click(guess_round(game, name), [model], [context, a, b, rnd, score], api_name="guess_round")
+    a.click(guess_answer(game, 0), [rnd], [a, b, score, rnd], api_name=False)
+    b.click(guess_answer(game, 1), [rnd], [a, b, score, rnd], api_name=False)
+    model.change(lambda m: scoreboard(game.totals(m)), [model], [score], api_name=False)
 
 
 def model_tabs(gr, bank, system: str) -> None:
@@ -114,7 +114,7 @@ def model_tabs(gr, bank, system: str) -> None:
 
 
 def styling(gr) -> dict:
-    return {"theme": theme(gr), "css": CSS}
+    return {"theme": theme(gr), "css": CSS, "head": KEYS}
 
 
 def build_app(bank, system: str, game=None):
