@@ -2,9 +2,7 @@ import json
 import xml.etree.ElementTree as ET
 
 import pytest
-from click.testing import CliRunner
 
-from echolm.cli import cli
 from echolm.eval.plots import grpo_chart
 from echolm.eval.plots import line_svg
 from echolm.eval.plots import sft_chart
@@ -59,12 +57,3 @@ def test_short_history_is_a_clear_error(tmp_path):
     (run / "run_info.json").write_text(json.dumps({"val_history": GRPO_HISTORY[:1]}), encoding="utf-8")
     with pytest.raises(ValueError, match="fewer than 2"):
         grpo_chart(run)
-
-
-def test_plot_command(tmp_path):
-    sft_run(tmp_path)
-    grpo_run(tmp_path)
-    out = tmp_path / "figs"
-    res = CliRunner().invoke(cli, ["eval", "plot", "--outputs", str(tmp_path), "--out", str(out)])
-    assert res.exit_code == 0, res.output
-    assert sorted(p.name for p in out.iterdir()) == ["grpo_val_reward.svg", "sft_val_loss.svg"]

@@ -71,3 +71,13 @@ def test_seed_runs_get_a_mean_row(tmp_path):
     text = build_report(tmp_path)
     assert "| grpo (mean of 3 seeds) | 0.800 ±0.100 | 0.200 ±0.000 |" in text
     assert text.index("| sft |") < text.index("| grpo (mean") < text.index("| grpo-s1 |")
+
+
+def test_readme_gets_the_table_without_the_metric_notes(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(f"{START}\n{END}\n", encoding="utf-8")
+    (tmp_path / "eval").mkdir()
+    report = write_report(runs(tmp_path / "eval"), readme).read_text(encoding="utf-8")
+    assert "- **detect AUC" in report
+    assert "- **detect AUC" not in readme.read_text(encoding="utf-8")
+    assert "| 40.0 |" in report

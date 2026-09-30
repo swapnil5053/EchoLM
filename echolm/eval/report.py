@@ -39,7 +39,9 @@ def cell(metrics: dict, key: str) -> str:
         return f"{metrics[key]:.3f} ±{metrics[f'{key}_seed_sd']:.3f}"
     text = fmt(metrics.get(key))
     if key == "median_words" and metrics.get(key) is not None:
-        text = f"{metrics[key]:g}"
+        text = f"{round(metrics[key], 1):g}"
+    if key == "reply_ppl" and metrics.get(key) is not None:
+        text = f"{metrics[key]:.1f}"
     if key == "chrf" and metrics.get("chrf_ci"):
         lo, hi = metrics["chrf_ci"]
         text += f" ({lo:.3f}–{hi:.3f})"
@@ -94,16 +96,17 @@ def table(runs: dict[str, dict]) -> str:
     return "\n".join(lines)
 
 
-def build_report(root: Path) -> str:
+def build_report(root: Path, notes: bool = True) -> str:
+    """The results table; `notes` adds one line per metric (the README explains them in its own words)."""
     runs = load_runs(root)
     first = runs[order(list(runs))[0]]
     seeds = first["per_seed"]
     n = seeds[next(iter(seeds))]["n"]
-    notes = [f"- **{label}**: {desc}" for _, label, desc in COLUMNS]
+    legend = [f"- **{label}**: {desc}" for _, label, desc in COLUMNS] + [""] if notes else []
     return "\n".join([
         f"{n} held-out test replies (later in time than all training data), {len(seeds)} sampled "
         "replies each at temperature 0.8. † = also a GRPO reward on the training split.", "",
-        table(runs), "", *human_lines(root), *notes, "",
+        table(runs), "", *human_lines(root), *legend,
     ])
 
 
@@ -126,12 +129,11 @@ def update_readme(readme: Path, body: str) -> None:
 
 
 def write_report(root: Path, readme: Path | None = None) -> Path:
-    body = build_report(root)
     path = root / "report.md"
-    path.write_text("# EchoLM evaluation\n\n" + body, encoding="utf-8")
+    path.write_text("# EchoLM evaluation\n\n" + build_report(root), encoding="utf-8")
     (root / "report.json").write_text(json.dumps(load_runs(root), indent=2), encoding="utf-8")
     if readme is not None:
-        update_readme(readme, body)
+        update_readme(readme, build_report(root, notes=False))
         log.info("results table updated in %s", readme)
     log.info("report written to %s", path)
     return path
