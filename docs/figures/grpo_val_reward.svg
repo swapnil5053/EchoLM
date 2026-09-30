@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300" role="img" aria-label="GRPO: validation reward">
+<style>
+  svg { --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --grid: #e4e3de; --line: #2a78d6; }
+  @media (prefers-color-scheme: dark) {
+    svg { --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --grid: #3a3a37; --line: #3987e5; }
+  }
+  text { font: 12px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink2); }
+  .title { font-size: 14px; font-weight: 600; fill: var(--ink); }
+  .note { fill: var(--ink); }
+</style>
+<rect width="640" height="300" rx="8" fill="var(--surface)"/>
+<text class="title" x="64" y="26">GRPO: validation reward</text>
+<text x="340.0" y="292" text-anchor="middle">GRPO step</text>
+<text x="14" y="152.0" text-anchor="middle" transform="rotate(-90 14 152.0)">val reward</text>
+<line x1="64" x2="616" y1="238.0" y2="238.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="56" y="242.0" text-anchor="end">0.675</text>
+<line x1="64" x2="616" y1="195.6" y2="195.6" stroke="var(--grid)" stroke-width="1"/>
+<text x="56" y="199.6" text-anchor="end">0.7</text>
+<line x1="64" x2="616" y1="153.2" y2="153.2" stroke="var(--grid)" stroke-width="1"/>
+<text x="56" y="157.2" text-anchor="end">0.725</text>
+<line x1="64" x2="616" y1="110.8" y2="110.8" stroke="var(--grid)" stroke-width="1"/>
+<text x="56" y="114.8" text-anchor="end">0.75</text>
+<line x1="64" x2="616" y1="68.4" y2="68.4" stroke="var(--grid)" stroke-width="1"/>
+<text x="56" y="72.4" text-anchor="end">0.775</text>
+<text x="64.0" y="274" text-anchor="middle">0</text>
+<text x="202.0" y="274" text-anchor="middle">50</text>
+<text x="340.0" y="274" text-anchor="middle">100</text>
+<text x="478.0" y="274" text-anchor="middle">150</text>
+<text x="616.0" y="274" text-anchor="middle">200</text>
+<line x1="64" x2="616" y1="112.8" y2="112.8" stroke="var(--ink2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="616" y="106.8" text-anchor="end">SFT (step 0)</text>
+<path d="M64.0,112.8 L133.0,118.8 L202.0,157.4 L271.0,183.2 L340.0,238.7 L409.0,222.4 L478.0,168.8 L547.0,68.4 L616.0,65.3" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="64.0" cy="112.8" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 0: 0.7488</title></circle>
+<circle cx="133.0" cy="118.8" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 25: 0.7453</title></circle>
+<circle cx="202.0" cy="157.4" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 50: 0.7225</title></circle>
+<circle cx="271.0" cy="183.2" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 75: 0.7073</title></circle>
+<circle cx="340.0" cy="238.7" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 100: 0.6746</title></circle>
+<circle cx="409.0" cy="222.4" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 125: 0.6842</title></circle>
+<circle cx="478.0" cy="168.8" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 150: 0.7158</title></circle>
+<circle cx="547.0" cy="68.4" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 175: 0.775</title></circle>
+<circle cx="616.0" cy="65.3" r="4" fill="var(--line)" stroke="var(--surface)" stroke-width="2"><title>GRPO step 200: 0.7768</title></circle>
+<circle cx="616.0" cy="65.3" r="8" fill="none" stroke="var(--ink)" stroke-width="2"/>
+<text class="note" x="616.0" y="50.3" text-anchor="end">best: step 200</text>
+</svg>
