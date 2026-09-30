@@ -1,22 +1,10 @@
 # EchoLM
 
-[![tests](https://github.com/swapnil5053/EchoLM/actions/workflows/ci.yml/badge.svg)](https://github.com/swapnil5053/EchoLM/actions/workflows/ci.yml)
-
 Fine-tune a 1.5B language model to reply the way one person texts, then check how close it got on messages it never saw. Runs on an 8 GB laptop GPU.
 
 The pipeline takes a WhatsApp or Telegram export, builds a dataset from it, trains Qwen2.5-1.5B-Instruct with LoRA, and then trains it further with GRPO, a reinforcement learning step I wrote from scratch. Every model is tested on replies written after everything it trained on.
 
 My own chats stay private, so the published results use a public stand-in: one active helper from the Ubuntu IRC logs, whose one-to-one conversations EchoLM rebuilds from the group channel.
-
-```mermaid
-flowchart LR
-    A[chat export] --> B[clean + mask]
-    B --> C[context windows]
-    C --> D[split by time]
-    D --> E[SFT with LoRA]
-    E --> F[GRPO]
-    F --> G[evaluate on later replies]
-```
 
 ## Results
 
