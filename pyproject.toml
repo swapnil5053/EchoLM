@@ -28,6 +28,9 @@ echolm = "echolm.cli:cli"
 [tool.setuptools.packages.find]
 include = ["echolm*"]
 
+[tool.setuptools.package-data]
+echolm = ["demo/*.css"]
+
 [tool.ruff]
 line-length = 110
 target-version = "py310"

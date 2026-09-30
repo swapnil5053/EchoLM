@@ -34,11 +34,6 @@ def load_pairs(data_dir: Path, eval_dir: Path, model: str) -> list[dict]:
             if i in rows and out.strip() and out.strip() != rows[i]["reference"].strip()]
 
 
-def render_context(context: list[dict]) -> str:
-    lines = [f"**{'them' if m['role'] == 'user' else 'reply'}:** {m['content']}" for m in context[-6:]]
-    return "\n\n".join(lines) or "_(no earlier messages)_"
-
-
 class GuessGame:
     def __init__(self, data_dir: Path, eval_dir: Path, models: tuple[str, ...] = ("sft", "grpo"),
                  seed: int | None = None):

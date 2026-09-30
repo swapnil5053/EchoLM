@@ -1,9 +1,14 @@
 import inspect
 import logging
 
-from echolm.demo.guess import render_context
 from echolm.demo.models import bubbles
 from echolm.demo.models import to_messages
+from echolm.demo.style import CSS
+from echolm.demo.style import MASTHEAD
+from echolm.demo.style import persona
+from echolm.demo.style import scoreboard
+from echolm.demo.style import theme
+from echolm.demo.style import transcript
 
 log = logging.getLogger(__name__)
 
@@ -37,48 +42,58 @@ def compare(bank, system: str):
     return fn
 
 
-def guess_round(game):
-    def fn(model: str):
+def slip(gr, text: str, mark: str | None = None):
+    classes = ["slip", mark] if mark else ["slip"]
+    return gr.update(value=text, elem_classes=classes, interactive=mark is None)
+
+
+def guess_round(game, name: str):
+    def fn(model: str, tally: list[int]):
+        import gradio as gr
+
         rnd = game.new_round(model)
-        return render_context(rnd.context), rnd.options[0], rnd.options[1], rnd, ""
+        return (transcript(rnd.context, name), slip(gr, rnd.options[0]), slip(gr, rnd.options[1]), rnd,
+                scoreboard(tally))
 
     return fn
 
 
 def guess_answer(game, picked: int):
     def fn(rnd, tally: list[int]):
-        done = f"{tally[0]} / {tally[1]} spotted"
+        import gradio as gr
+
         if rnd is None:
-            return "press **new round** for the next pair", tally, done, None
+            return gr.update(), gr.update(), tally, scoreboard(tally, "Press Next pair to continue."), None
         correct = game.answer(rnd, picked)
         tally = [tally[0] + correct, tally[1] + 1]
-        verdict = "Right" if correct else "Wrong"
-        text = f"**{verdict}.** The real reply was **{'AB'[rnd.real]}**."
+        marks = ["real" if i == rnd.real else "model" for i in range(2)]
+        verdict = f"{'Right' if correct else 'Not this time'}: {'AB'[rnd.real]} was the real reply."
         # the round is cleared so a second click cannot log the same pair twice
-        score = f"{tally[0]} / {tally[1]} spotted ({tally[0] / tally[1]:.0%}; 50% = can't tell)"
-        return text, tally, score, None
+        slips = [slip(gr, text, mark) for text, mark in zip(rnd.options, marks, strict=True)]
+        return *slips, tally, scoreboard(tally, verdict, correct), None
 
     return fn
 
 
-def guess_tab(gr, game) -> None:
-    gr.Markdown("One reply is what the person really wrote, the other is the model's (sampled for the "
-                "held-out test set). Pick the real one. Answers are saved to the eval folder and "
-                "`echolm eval report` adds the score to the table.")
+def guess_tab(gr, game, name: str) -> None:
     with gr.Row():
         model = gr.Dropdown(choices=[(LABELS.get(m, m), m) for m in game.models], value=game.models[-1],
-                            label="model")
-        new = gr.Button("new round", variant="primary")
-    context = gr.Markdown()
-    with gr.Row():
-        a, b = gr.Textbox(label="A", lines=3), gr.Textbox(label="B", lines=3)
-    with gr.Row():
-        pick_a, pick_b = gr.Button("A is real"), gr.Button("B is real")
-    result, score = gr.Markdown(), gr.Markdown("0 / 0")
+                            label="model", scale=3)
+        with gr.Column(scale=1, min_width=160):
+            new = gr.Button("Next pair", variant="primary")
+    context = gr.HTML("<div class='empty'>Press <b>Next pair</b> to see a conversation.</div>")
+    with gr.Row(equal_height=True):
+        a = gr.Button("", elem_id="slip-a", elem_classes=["slip"], interactive=False)
+        b = gr.Button("", elem_id="slip-b", elem_classes=["slip"], interactive=False)
     rnd, tally = gr.State(None), gr.State([0, 0])
-    new.click(guess_round(game), [model], [context, a, b, rnd, result], api_name="guess_round")
-    pick_a.click(guess_answer(game, 0), [rnd, tally], [result, tally, score, rnd], api_name=False)
-    pick_b.click(guess_answer(game, 1), [rnd, tally], [result, tally, score, rnd], api_name=False)
+    score = gr.HTML(scoreboard([0, 0]))
+    gr.Markdown("One reply is what the person actually sent, the other is the model's, sampled for the "
+                "held-out test set. Answers are saved, and `echolm eval report` adds the hit rate to the "
+                "results table.")
+    round_fn = guess_round(game, name)
+    new.click(round_fn, [model, tally], [context, a, b, rnd, score], api_name="guess_round")
+    a.click(guess_answer(game, 0), [rnd, tally], [a, b, tally, score, rnd], api_name=False)
+    b.click(guess_answer(game, 1), [rnd, tally], [a, b, tally, score, rnd], api_name=False)
 
 
 def model_tabs(gr, bank, system: str) -> None:
@@ -98,15 +113,28 @@ def model_tabs(gr, bank, system: str) -> None:
         prompt.submit(compare(bank, system), [prompt, temp2], outs, api_name="compare")
 
 
+def styling(gr) -> dict:
+    return {"theme": theme(gr), "css": CSS}
+
+
 def build_app(bank, system: str, game=None):
     import gradio as gr
 
-    with gr.Blocks(title="EchoLM", analytics_enabled=False) as app:
-        gr.Markdown("# EchoLM\nYou play the other person in the chat; the model replies the way "
-                    "its owner texts.")
-        if bank is not None:
-            model_tabs(gr, bank, system)
+    styled = styling(gr) if "css" in inspect.signature(gr.Blocks.__init__).parameters else {}
+    with gr.Blocks(title="EchoLM", analytics_enabled=False, **styled) as app:
+        gr.HTML(MASTHEAD)
         if game is not None and game.models:
             with gr.Tab("Real or model?"):
-                guess_tab(gr, game)
+                guess_tab(gr, game, persona(system))
+        if bank is not None:
+            model_tabs(gr, bank, system)
     return app
+
+
+def serve(app, port: int) -> None:
+    import gradio as gr
+
+    # gradio 6 moved theme and css from Blocks to launch()
+    styled = styling(gr) if "css" in inspect.signature(gr.Blocks.launch).parameters else {}
+    # bound to this machine only: the replies may come from private chats
+    app.launch(server_name="127.0.0.1", server_port=port, share=False, inbrowser=True, **styled)

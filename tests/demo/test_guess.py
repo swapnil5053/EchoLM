@@ -4,7 +4,6 @@ import pytest
 
 from echolm.demo.guess import GuessGame
 from echolm.demo.guess import load_pairs
-from echolm.demo.guess import render_context
 from echolm.eval.human import summary
 
 SYSTEM = {"role": "system", "content": "You are Alex."}
@@ -54,9 +53,3 @@ def test_rounds_place_the_real_reply_at_random_and_log_answers(dirs):
 def test_unknown_model_is_a_clear_error(dirs):
     with pytest.raises(ValueError, match="echolm eval run"):
         GuessGame(*dirs).new_round("grpo")
-
-
-def test_render_context():
-    text = render_context([{"role": "user", "content": "q"}, {"role": "assistant", "content": "a"}])
-    assert text == "**them:** q\n\n**reply:** a"
-    assert "no earlier" in render_context([])

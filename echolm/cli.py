@@ -213,6 +213,7 @@ def push(root: Path, repo: str | None, private: bool) -> None:
               help="only the 'Real or model?' game, from saved eval samples; no GPU or model loading")
 def demo(outputs: Path, data: Path, sft: Path | None, grpo: Path | None, port: int, guess_only: bool) -> None:
     from echolm.demo.app import build_app
+    from echolm.demo.app import serve
     from echolm.demo.guess import GuessGame
     from echolm.demo.models import ModelBank
     from echolm.demo.models import find_adapters
@@ -227,9 +228,7 @@ def demo(outputs: Path, data: Path, sft: Path | None, grpo: Path | None, port: i
         adapters = find_adapters(outputs)
         adapters.update({k: v for k, v in (("sft", sft), ("grpo", grpo)) if v})
         bank = ModelBank(EvalConfig().base_model, adapters)
-    # bound to this machine only: the replies are generated from private chats
-    build_app(bank, system_prompt(data), game).launch(server_name="127.0.0.1", server_port=port,
-                                                      share=False, inbrowser=True)
+    serve(build_app(bank, system_prompt(data), game), port)
 
 
 if __name__ == "__main__":
