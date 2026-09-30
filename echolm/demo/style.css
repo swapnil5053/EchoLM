@@ -100,3 +100,9 @@ button.slip.model::after { content: "MODEL"; color: var(--e-ink2); }
 .score .verdict.bad { color: var(--e-bad); }
 .hint { font-size: 13px; color: var(--e-ink2); }
 .hint p { margin: 0; }
+
+/* scale the whole page up on large or high-resolution screens so it never sits small in the middle */
+@media (min-width: 1700px) { .gradio-container { zoom: 1.2; } }
+@media (min-width: 2100px) { .gradio-container { zoom: 1.45; } }
+@media (min-width: 2700px) { .gradio-container { zoom: 1.8; } }
+@media (min-width: 3500px) { .gradio-container { zoom: 2.3; } }
