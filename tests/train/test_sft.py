@@ -51,6 +51,7 @@ def test_sft_runs_end_to_end_on_cpu(tmp_path, monkeypatch, caplog):
     import pytest
 
     pytest.importorskip("peft")
+    pytest.importorskip("datasets")
     import torch
 
     from echolm.train import sft
