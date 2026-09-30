@@ -6,8 +6,6 @@ The pipeline takes a WhatsApp or Telegram export, builds a dataset from it, trai
 
 My own chats stay private, so the published results use a public stand-in: one active helper from the Ubuntu IRC logs, whose one-to-one conversations EchoLM rebuilds from the group channel.
 
-<p align="center"><img src="docs/figures/demo.png" alt="The Real or model? game: a conversation, two candidate replies, and the running hit rate" width="85%"></p>
-
 ## Results
 
 Ubuntu IRC, one user, tested on the most recent 10% of their conversations.
