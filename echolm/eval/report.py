@@ -36,7 +36,8 @@ def fmt(value) -> str:
 
 def cell(metrics: dict, key: str) -> str:
     if f"{key}_seed_sd" in metrics:
-        return f"{metrics[key]:.3f} ±{metrics[f'{key}_seed_sd']:.3f}"
+        digits = 1 if key in ("reply_ppl", "median_words") else 3
+        return f"{metrics[key]:.{digits}f} ±{metrics[f'{key}_seed_sd']:.{digits}f}"
     text = fmt(metrics.get(key))
     if key == "median_words" and metrics.get(key) is not None:
         text = f"{round(metrics[key], 1):g}"

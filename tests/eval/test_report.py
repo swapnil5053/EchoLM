@@ -81,3 +81,12 @@ def test_readme_gets_the_table_without_the_metric_notes(tmp_path):
     assert "- **detect AUC" in report
     assert "- **detect AUC" not in readme.read_text(encoding="utf-8")
     assert "| 40.0 |" in report
+
+
+def test_seed_mean_rounds_perplexity_and_length(tmp_path):
+    for name, ppl in (("grpo-s1", 19.7), ("grpo-s2", 19.8)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "metrics.json").write_text(json.dumps({**METRICS, "reply_ppl": ppl}),
+                                                      encoding="utf-8")
+    text = build_report(tmp_path)
+    assert "| 19.8 ±0.1 |" in text and "| 4.0 ±0.0 |" in text

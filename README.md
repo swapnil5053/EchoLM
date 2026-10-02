@@ -31,16 +31,17 @@ How to read it:
 What I take from it:
 
 - SFT does most of the work. Detection drops from 0.965 to 0.838, the real replies become 2.6x less surprising to the model, assistant phrasing goes from 29% of replies to 1%, and replies shrink from 46 words to 19.
-- GRPO improved what it was rewarded for (style gap 0.237 to 0.196, length closer to the real 11 words) and nothing else. On detection and perplexity it is level with SFT, within the error bars.
+- GRPO does not beat SFT. Over three seeds (lr 5e-6, fixed-draw validation) detection is 0.841 ±0.005 against SFT's 0.838, chrF 0.145 against 0.144 and perplexity the same. It only moves what it is rewarded for: style gap 0.206 ±0.028 against 0.237, and slightly shorter replies. In one of the three seeds no GRPO checkpoint beat step 0 on validation, so the run kept the SFT weights, which is why grpo-s1 matches the sft row exactly.
+- People can't tell either. In blind pairs the real reply was picked 45% of the time over 122 rounds against the GRPO model, about what guessing gives.
 - The base model has the best chrF because chrF favours long answers that happen to cover more of the reference. That is why chrF is always paired with a length reward.
-- There is still a big gap: 0.83 against the 0.59 floor. The test set has 80 replies, so small differences are noise.
+- The gap the classifier sees is still large: 0.84 against the 0.59 floor. With 80 test replies, differences of a few hundredths are noise.
 
 <p align="center">
   <img src="docs/figures/sft_val_loss.svg" alt="SFT validation loss by step, with the selected checkpoint circled" width="49%">
   <img src="docs/figures/grpo_val_reward.svg" alt="GRPO validation reward by step, against the SFT starting point" width="49%">
 </p>
 
-The GRPO run above dipped before recovering, and single-sample validation made its checkpoints hard to compare. The config now uses half the learning rate and validates every checkpoint on the same random samples. `scripts\run.ps1 -Stages seeds` trains three more GRPO runs with different seeds and adds their mean and spread to the table.
+The single `grpo` row and the curve above come from the first run (lr 1e-5, one fresh sample per validation prompt), which dipped before recovering and could not tell its checkpoints apart. The seeded runs use half the learning rate and validate every checkpoint on the same random samples (`scripts\run.ps1 -Stages seeds`). My reading: with rewards computed against one reference reply, GRPO on 2000 replies sharpens surface style but has nothing more to teach about what this person would say.
 
 **On my own chat.** The first run was on a private Hinglish chat (813 training replies; only these totals are shared). SFT dropped assistant phrasing from 63% to 0%, but only a third of its replies were unique against 96% of mine. The checkpoint with the lowest validation loss copied training text 10x more often than one from 20 steps earlier with almost the same loss. So EchoLM picks the earliest checkpoint within 3% of the best loss, and GRPO has explicit penalties for duplicate and copied replies.
 
