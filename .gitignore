@@ -18,3 +18,5 @@ WhatsApp Chat*.txt
 /wandb/
 *.safetensors
 *.gguf
+
+unsloth_compiled_cache/
