@@ -29,6 +29,7 @@ Ubuntu IRC, one user, tested on the most recent 10% of their conversations.
 | your real replies | 0.588 | – | 0.000 | – | 0.988 | 0.000 | 0.000 | 11 |
 
 Human judge, blind A/B in the demo's "Real or model?" tab (50% = cannot tell): sft: real reply spotted in 3 of 6 rounds (50%); grpo: real reply spotted in 55 of 122 rounds (45%).
+
 <!-- results:end -->
 
 How to read it: **detect AUC** is the main number. A classifier tries to tell the model's replies from the real ones; 1.0 means it always can, 0.5 means it can't, and no reward trains on it. The last row compares the person's newer replies with their older ones, which is the best a model could realistically reach. † marks metrics GRPO was also rewarded on, so gains there are expected.
