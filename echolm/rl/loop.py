@@ -66,8 +66,7 @@ def train_step(policy: Policy, batch: list[Example], cfg: GrpoConfig, ctx: Rewar
 
 
 def validate(policy: Policy, examples: list[Example], cfg: GrpoConfig, ctx: RewardContext) -> dict:
-    """Val reward on fixed random draws: every checkpoint samples with the same seed, so the
-    comparison between checkpoints is not swamped by sampling noise. Training RNG is left untouched."""
+    """Val reward on the same random draws for every checkpoint, without touching the training RNG."""
     import torch
 
     policy.to_inference(policy.model)

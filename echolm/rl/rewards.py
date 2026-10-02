@@ -48,8 +48,7 @@ def scaled_features(text: str) -> dict[str, float]:
 
 
 def style_match(out: str, ref: str, scales: dict[str, float]) -> float:
-    # compared with the real reply to the same message, not with an average reply: matching the
-    # average would reward the one most typical reply and push every answer towards it
+    # against the reply to this message, not an average reply, which would reward the most typical answer
     fo, fr = scaled_features(out), scaled_features(ref)
     gaps = [min(1.0, abs(fo[k] - fr[k]) / scales[k]) for k in fr]
     return 1.0 - sum(gaps) / len(gaps)

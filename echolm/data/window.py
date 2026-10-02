@@ -63,7 +63,7 @@ def find_quote(target: Turn, context: list[tuple[Turn, str]], by_id: dict[str, M
 
 
 def window_id(chat_id: str, ts: str, target: str) -> str:
-    return hashlib.sha1(f"{chat_id}|{ts}|{target}".encode()).hexdigest()[:12]
+    return hashlib.sha1(f"{chat_id}|{ts}|{target}".encode(), usedforsecurity=False).hexdigest()[:12]
 
 
 def make_window(

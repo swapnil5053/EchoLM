@@ -11,9 +11,7 @@ FOLDS = 5
 
 
 def detect_auc(real: list[str], generated: list[str], seed: int) -> float | None:
-    # a classifier tries to tell your real replies from the model's, with cross-validation on
-    # equal-sized samples; 0.5 means it cannot tell them apart, 1.0 means every reply is spotted.
-    # nothing in training optimizes against it, unlike the reward-backed columns
+    # 0.5 = can't tell real from generated; no reward trains against this
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import roc_auc_score

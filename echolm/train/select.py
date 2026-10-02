@@ -4,9 +4,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# a later checkpoint has to beat the best val loss by more than this share to be worth its extra
-# memorization: on the first real run, step 80 was within 2.6% of the best loss (step 100) but
-# copied training text 10x less often
+# first real run: step 80 was within 2.6% of the best loss (step 100) but copied training text 10x less
 DEFAULT_TOL = 0.03
 
 

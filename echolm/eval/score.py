@@ -52,9 +52,7 @@ def score_generations(gens: list[dict], windows: list[dict], seed: int) -> dict:
 
 
 def score_reference(windows: list[dict], seed: int) -> dict:
-    # the real test replies scored like a model, for the columns where that means something.
-    # detect_auc here pits your later (test) replies against your earlier (train) ones: the lowest
-    # a model can realistically reach, since your own style drifts over time
+    # later real replies vs earlier ones: the realistic floor, since style drifts over time
     refs = [w["target"] for w in windows if w["split"] == "test"]
     train_targets = [w["target"] for w in windows if w["split"] == "train"]
     scored = score_outputs(refs, refs, train_targets)

@@ -31,8 +31,7 @@ def advantages(rewards: list[float], scale: str) -> list[float]:
 
 
 def trim(ids: list[int], eos: set[int]) -> list[int]:
-    # keep the first end token so the model is also trained on when to stop; generate() only pads
-    # after an end token, so a completion without one ran to max_new_tokens and is kept whole
+    # keep the end token so the model also learns when to stop
     for i, t in enumerate(ids):
         if t in eos:
             return ids[:i + 1]
