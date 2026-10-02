@@ -1,10 +1,10 @@
-# EchoLM
+﻿# EchoLM
 
 Fine-tune a small language model (Qwen2.5-1.5B) to reply the way one specific person texts, then check how close it got on messages it never saw. Everything runs on an 8 GB laptop GPU.
 
 ## Why I built this
 
-I wanted to know whether a model small enough to train on my laptop could pick up how I actually text: short, mostly lowercase, Hindi and English mixed in one sentence. Projects like WeClone already fine-tune on chat history, but they stop at "here's the model". They never measure whether the replies sound like you, or whether the model just learned a few stock lines.
+I wanted to know whether a model small enough to train on my laptop could pick up how I actually text: short, mostly lowercase, Hindi and English mixed in one sentence. Other projects already fine-tune on chat history, but they stop at "here's the model". They never measure whether the replies sound like you, or whether the model just learned a few stock lines.
 
 So EchoLM does the training and the measuring. The model is always tested on replies written after everything it trained on, a classifier tries to tell its replies from the real ones, and a small game lets people try the same thing.
 
@@ -97,6 +97,6 @@ echolm format
 
 Exports, datasets, model weights and generated replies are git-ignored. The demo only listens on 127.0.0.1, and `echolm push` refuses to upload any model that wasn't trained on the public IRC data.
 
-## Credits
+## License
 
-Inspired by [WeClone](https://github.com/xming521/WeClone); see [ATTRIBUTION.md](ATTRIBUTION.md). MIT license.
+MIT
